@@ -1,0 +1,3 @@
+cd calculadora_reducao_icms_nfe_simples
+
+.\.venv\Scripts\python.exe -m streamlit run app.py
