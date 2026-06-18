@@ -533,9 +533,7 @@ def tela_login():
         with st.form("form_login"):
             usuario = st.text_input("Usuário")
             senha = st.text_input("Senha", type="password")
-            entrar = st.form_submit_button(
-                "Entrar", type="primary", width="stretch"
-            )
+            entrar = st.form_submit_button("Entrar", type="primary", width="stretch")
 
         if entrar:
             usuario = usuario.strip()
@@ -1428,7 +1426,9 @@ def render_submodulo_aliquota_efetiva():
         )
 
     if not calcular:
-        st.info("Preencha o valor total, o ICMS destacado e clique em Calcular alíquota efetiva.")
+        st.info(
+            "Preencha o valor total, o ICMS destacado e clique em Calcular alíquota efetiva."
+        )
         return
 
     try:
@@ -1645,47 +1645,7 @@ def render_submodulo_pis_cofins():
     )
 
 
-def render_calculos_manuais():
-    render_topo(
-        "Cálculos Manuais",
-        "Escolha um submódulo e calcule cada tributo separadamente, sem depender de XML.",
-    )
-
-    submodulo = st.radio(
-        "Submódulo",
-        [
-            "ICMS / Redução",
-            "Alíquota efetiva / pRedBC",
-            "IPI",
-            "PIS e COFINS",
-        ],
-        horizontal=True,
-        key="manual_submodulo",
-    )
-
-    st.divider()
-
-    if submodulo == "ICMS / Redução":
-        render_submodulo_icms_reducao()
-    elif submodulo == "Alíquota efetiva / pRedBC":
-        render_submodulo_aliquota_efetiva()
-    elif submodulo == "IPI":
-        render_submodulo_ipi()
-    elif submodulo == "PIS e COFINS":
-        render_submodulo_pis_cofins()
-
-    st.warning(
-        "Observação: os cálculos manuais são simulações. Regime tributário, CST/CSOSN, NCM, benefício fiscal "
-        "e regra específica do produto ainda precisam ser conferidos na análise fiscal."
-    )
-
-
-def render_formulas():
-    render_topo(
-        "Fórmulas utilizadas",
-        "Referência dos critérios aplicados na leitura do XML e na simulação proporcional.",
-    )
-
+def render_conteudo_formulas():
     render_section_header("Redução de base ICMS")
     st.code(
         "pRedBC calculado = 100 - ((vBC / Valor referência ICMS) * 100)",
@@ -1734,6 +1694,54 @@ def render_formulas():
     )
 
 
+def render_calculos_manuais():
+    render_topo(
+        "Cálculos Manuais",
+        "Escolha um submódulo e calcule cada tributo separadamente, sem depender de XML.",
+    )
+
+    submodulo = st.radio(
+        "Submódulo",
+        [
+            "ICMS / Redução",
+            "Alíquota efetiva / pRedBC",
+            "IPI",
+            "PIS e COFINS",
+        ],
+        horizontal=True,
+        key="manual_submodulo",
+    )
+
+    st.divider()
+
+    if submodulo == "ICMS / Redução":
+        render_submodulo_icms_reducao()
+    elif submodulo == "Alíquota efetiva / pRedBC":
+        render_submodulo_aliquota_efetiva()
+    elif submodulo == "IPI":
+        render_submodulo_ipi()
+    elif submodulo == "PIS e COFINS":
+        render_submodulo_pis_cofins()
+
+    st.warning(
+        "Observação: os cálculos manuais são simulações. Regime tributário, CST/CSOSN, NCM, benefício fiscal "
+        "e regra específica do produto ainda precisam ser conferidos na análise fiscal."
+    )
+
+    st.divider()
+    with st.expander("Fórmulas fixas dos cálculos", expanded=True):
+        render_conteudo_formulas()
+
+
+def render_formulas():
+    render_topo(
+        "Fórmulas utilizadas",
+        "Referência dos critérios aplicados na leitura do XML, nos cálculos manuais e na simulação proporcional.",
+    )
+
+    render_conteudo_formulas()
+
+
 aplicar_css_global()
 
 if not tela_login():
@@ -1741,8 +1749,13 @@ if not tela_login():
 
 pagina, arquivos_xml, criterio_referencia_icms = render_sidebar_inicio()
 
+# Páginas independentes de XML devem renderizar antes da validação do upload.
+# Assim as fórmulas e os cálculos manuais ficam fixos na aba, mesmo sem arquivo enviado.
 if pagina == "Cálculos Manuais":
     render_calculos_manuais()
+    st.stop()
+elif pagina == "Fórmulas":
+    render_formulas()
     st.stop()
 
 if not arquivos_xml:
@@ -1781,7 +1794,3 @@ elif pagina == "Resultado XML":
     render_resultado_xml(df)
 elif pagina == "Simulador":
     render_simulador(df, criterio_referencia_icms)
-elif pagina == "Cálculos Manuais":
-    render_calculos_manuais()
-elif pagina == "Fórmulas":
-    render_formulas()
