@@ -534,7 +534,7 @@ def tela_login():
             usuario = st.text_input("Usuário")
             senha = st.text_input("Senha", type="password")
             entrar = st.form_submit_button(
-                "Entrar", type="primary", use_container_width=True
+                "Entrar", type="primary", width="stretch"
             )
 
         if entrar:
@@ -969,7 +969,7 @@ def render_dashboard(df, arquivos_xml):
 
             st.dataframe(
                 resumo_emitente,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
                 column_config={
                     "Valor_produto": st.column_config.NumberColumn(
@@ -997,7 +997,7 @@ def render_dashboard(df, arquivos_xml):
                 .rename_axis("Situação")
                 .reset_index(name="Quantidade")
             )
-            st.dataframe(resumo_situacao, use_container_width=True, hide_index=True)
+            st.dataframe(resumo_situacao, width="stretch", hide_index=True)
         else:
             st.info("Ainda não há coluna de situação pRedBC.")
 
@@ -1052,7 +1052,7 @@ def render_resultado_xml(df):
             data=csv,
             file_name="analise_xml.csv",
             mime="text/csv",
-            use_container_width=True,
+            width="stretch",
         )
 
     with col_acoes2:
@@ -1063,7 +1063,7 @@ def render_resultado_xml(df):
 
     evento_tabela_xml = st.dataframe(
         df,
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         column_config=config_colunas_resultado_xml(),
         selection_mode="single-row",
@@ -1196,7 +1196,7 @@ def render_simulador(df, criterio_referencia_icms):
     with st.expander("Ver dados completos do item selecionado", expanded=False):
         st.dataframe(
             pd.DataFrame([item_original]),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             column_config=config_colunas_resultado_xml(),
         )
@@ -1224,7 +1224,7 @@ def render_simulador(df, criterio_referencia_icms):
     with col_q3:
         render_metric_card("Restante", f"{quantidade_restante:.4f}")
 
-    if st.button("Simular desmembramento", type="primary", use_container_width=True):
+    if st.button("Simular desmembramento", type="primary", width="stretch"):
         try:
             resultado_simulacao = simular_desmembramento(
                 item_original=item_original,
@@ -1241,7 +1241,7 @@ def render_simulador(df, criterio_referencia_icms):
 
             st.dataframe(
                 df_resultado_simulacao,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
                 column_config=config_colunas_simulador(),
             )
@@ -1280,7 +1280,7 @@ def render_tabela_resultado_manual(resultado: dict, grupo: str, nome_arquivo: st
     ]
 
     df_resultado = pd.DataFrame(linhas)
-    st.dataframe(df_resultado, use_container_width=True, hide_index=True)
+    st.dataframe(df_resultado, width="stretch", hide_index=True)
 
     csv = df_resultado.to_csv(index=False, sep=";", encoding="utf-8-sig")
     st.download_button(
@@ -1288,7 +1288,7 @@ def render_tabela_resultado_manual(resultado: dict, grupo: str, nome_arquivo: st
         data=csv,
         file_name=nome_arquivo,
         mime="text/csv",
-        use_container_width=True,
+        width="stretch",
     )
 
 
@@ -1331,7 +1331,7 @@ def render_submodulo_icms_reducao():
             )
 
         calcular = st.form_submit_button(
-            "Calcular ICMS", type="primary", use_container_width=True
+            "Calcular ICMS", type="primary", width="stretch"
         )
 
     if not calcular:
@@ -1424,7 +1424,7 @@ def render_submodulo_aliquota_efetiva():
             )
 
         calcular = st.form_submit_button(
-            "Calcular alíquota efetiva", type="primary", use_container_width=True
+            "Calcular alíquota efetiva", type="primary", width="stretch"
         )
 
     if not calcular:
@@ -1509,7 +1509,7 @@ def render_submodulo_ipi():
             )
 
         calcular = st.form_submit_button(
-            "Calcular IPI", type="primary", use_container_width=True
+            "Calcular IPI", type="primary", width="stretch"
         )
 
     if not calcular:
@@ -1591,7 +1591,7 @@ def render_submodulo_pis_cofins():
             )
 
         calcular = st.form_submit_button(
-            "Calcular PIS/COFINS", type="primary", use_container_width=True
+            "Calcular PIS/COFINS", type="primary", width="stretch"
         )
 
     if not calcular:
