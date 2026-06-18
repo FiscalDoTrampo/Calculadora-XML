@@ -1294,8 +1294,8 @@ def render_tabela_resultado_manual(resultado: dict, grupo: str, nome_arquivo: st
 
 def render_submodulo_icms_reducao():
     render_section_header(
-        "ICMS com base reduzida",
-        "Informe o valor de referência, o percentual da base que será tributada e a alíquota nominal do ICMS.",
+        "ICMS com redução de base",
+        "Informe o valor de referência, a redução da base e a alíquota nominal do ICMS.",
     )
 
     with st.form("form_manual_icms_reducao"):
@@ -1309,10 +1309,10 @@ def render_submodulo_icms_reducao():
             )
 
         with col2:
-            percentual_base_icms = st.text_input(
-                "Percentual da base ICMS (%)",
-                placeholder="Ex.: 46,32",
-                key="manual_icms_percentual_base",
+            reducao_icms = st.text_input(
+                "Redução de base ICMS (%)",
+                placeholder="Ex.: 20,00",
+                key="manual_icms_reducao",
             )
 
         with col3:
@@ -1335,13 +1335,13 @@ def render_submodulo_icms_reducao():
         )
 
     if not calcular:
-        st.info("Preencha o valor de referência, o percentual da base ICMS e clique em Calcular ICMS.")
+        st.info("Preencha os campos do ICMS e clique em Calcular ICMS.")
         return
 
     try:
         resultado = calcular_icms_reducao_manual(
             valor_referencia_icms=valor_referencia_icms,
-            percentual_base_icms=percentual_base_icms,
+            reducao_icms=reducao_icms,
             sugestao_icms=sugestao_icms,
             aliquota_icms_manual=aliquota_icms_manual,
         )
@@ -1357,7 +1357,7 @@ def render_submodulo_icms_reducao():
         render_metric_card(
             "Base ICMS reduzida",
             f"R$ {formatar_numero(resultado.get('Base ICMS reduzida'))}",
-            f"Base aplicada: {formatar_numero(resultado.get('Percentual base ICMS %'), 4)}%",
+            f"Redução: {formatar_numero(resultado.get('Redução ICMS %'), 4)}%",
         )
     with col2:
         render_metric_card(
@@ -1367,9 +1367,9 @@ def render_submodulo_icms_reducao():
         )
     with col3:
         render_metric_card(
-            "Valor da redução",
+            "Valor reduzido",
             f"R$ {formatar_numero(resultado.get('Valor redução ICMS'))}",
-            f"Redução: {formatar_numero(resultado.get('Redução ICMS %'), 4)}%",
+            "Diferença entre referência e base reduzida",
         )
     with col4:
         render_metric_card(
@@ -1713,8 +1713,7 @@ def render_formulas():
 
     render_section_header("Cálculos Manuais")
     st.code(
-        "Base ICMS reduzida = Valor referência ICMS * Percentual base ICMS / 100\n"
-        "Redução ICMS % = 100 - Percentual base ICMS\n"
+        "Base ICMS reduzida = Valor referência ICMS * (1 - Redução ICMS / 100)\n"
         "Valor ICMS = Base ICMS reduzida * Alíquota ICMS / 100\n"
         "Alíquota efetiva = (Valor ICMS / Valor total produto) * 100\n"
         "Base ICMS estimada = Valor ICMS / (Alíquota ICMS nominal / 100)\n"
