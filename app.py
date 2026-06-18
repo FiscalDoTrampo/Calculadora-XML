@@ -444,56 +444,6 @@ def aplicar_css_global():
                 border-radius: 14px;
                 font-weight: 700;
             }
-
-            /* Correção final: remove bug visual do ícone nativo do arquivo no uploader da sidebar */
-            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderFile"] {
-                background: #111827 !important;
-                border: 1px solid rgba(255,255,255,0.18) !important;
-                border-radius: 10px !important;
-                padding: 0.55rem 0.65rem !important;
-                box-shadow: none !important;
-            }
-
-            /* Esconde o ícone nativo do arquivo, que em sidebar escura causa o quadrado visual quebrado */
-            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderFile"] > div:first-child {
-                display: none !important;
-            }
-
-            /* Mantém nome e tamanho do XML legíveis */
-            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderFileName"],
-            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderFileSize"],
-            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderFile"] span,
-            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderFile"] small {
-                color: #F8FAFC !important;
-                fill: #F8FAFC !important;
-                opacity: 1 !important;
-                text-shadow: none !important;
-            }
-
-            /* Ajusta botão de remover arquivo */
-            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderDeleteBtn"],
-            [data-testid="stSidebar"] [data-testid="stFileUploader"] button[aria-label*="Remove"],
-            [data-testid="stSidebar"] [data-testid="stFileUploader"] button[aria-label*="Remover"],
-            [data-testid="stSidebar"] [data-testid="stFileUploader"] button[aria-label*="Delete"],
-            [data-testid="stSidebar"] [data-testid="stFileUploader"] button[aria-label*="Excluir"] {
-                background: rgba(255,255,255,0.08) !important;
-                border: 1px solid rgba(255,255,255,0.14) !important;
-                border-radius: 999px !important;
-                color: #F8FAFC !important;
-                box-shadow: none !important;
-            }
-
-            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderDeleteBtn"] svg,
-            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderDeleteBtn"] svg path,
-            [data-testid="stSidebar"] [data-testid="stFileUploader"] button[aria-label*="Remove"] svg,
-            [data-testid="stSidebar"] [data-testid="stFileUploader"] button[aria-label*="Remove"] svg path,
-            [data-testid="stSidebar"] [data-testid="stFileUploader"] button[aria-label*="Remover"] svg,
-            [data-testid="stSidebar"] [data-testid="stFileUploader"] button[aria-label*="Remover"] svg path {
-                fill: #F8FAFC !important;
-                color: #F8FAFC !important;
-                opacity: 1 !important;
-            }
-
         </style>
         """,
         unsafe_allow_html=True,
@@ -1344,8 +1294,8 @@ def render_tabela_resultado_manual(resultado: dict, grupo: str, nome_arquivo: st
 
 def render_submodulo_icms_reducao():
     render_section_header(
-        "ICMS com redução de base",
-        "Informe o valor de referência, a redução da base e a alíquota nominal do ICMS.",
+        "ICMS com base reduzida",
+        "Informe o valor de referência, o percentual da base que será tributada e a alíquota nominal do ICMS.",
     )
 
     with st.form("form_manual_icms_reducao"):
@@ -1359,10 +1309,10 @@ def render_submodulo_icms_reducao():
             )
 
         with col2:
-            reducao_icms = st.text_input(
-                "Redução de base ICMS (%)",
-                placeholder="Ex.: 20,00",
-                key="manual_icms_reducao",
+            percentual_base_icms = st.text_input(
+                "Percentual da base ICMS (%)",
+                placeholder="Ex.: 46,32",
+                key="manual_icms_percentual_base",
             )
 
         with col3:
@@ -1385,13 +1335,13 @@ def render_submodulo_icms_reducao():
         )
 
     if not calcular:
-        st.info("Preencha os campos do ICMS e clique em Calcular ICMS.")
+        st.info("Preencha o valor de referência, o percentual da base ICMS e clique em Calcular ICMS.")
         return
 
     try:
         resultado = calcular_icms_reducao_manual(
             valor_referencia_icms=valor_referencia_icms,
-            reducao_icms=reducao_icms,
+            percentual_base_icms=percentual_base_icms,
             sugestao_icms=sugestao_icms,
             aliquota_icms_manual=aliquota_icms_manual,
         )
@@ -1407,7 +1357,7 @@ def render_submodulo_icms_reducao():
         render_metric_card(
             "Base ICMS reduzida",
             f"R$ {formatar_numero(resultado.get('Base ICMS reduzida'))}",
-            f"Redução: {formatar_numero(resultado.get('Redução ICMS %'), 4)}%",
+            f"Base aplicada: {formatar_numero(resultado.get('Percentual base ICMS %'), 4)}%",
         )
     with col2:
         render_metric_card(
@@ -1417,9 +1367,9 @@ def render_submodulo_icms_reducao():
         )
     with col3:
         render_metric_card(
-            "Valor reduzido",
+            "Valor da redução",
             f"R$ {formatar_numero(resultado.get('Valor redução ICMS'))}",
-            "Diferença entre referência e base reduzida",
+            f"Redução: {formatar_numero(resultado.get('Redução ICMS %'), 4)}%",
         )
     with col4:
         render_metric_card(
@@ -1763,7 +1713,8 @@ def render_formulas():
 
     render_section_header("Cálculos Manuais")
     st.code(
-        "Base ICMS reduzida = Valor referência ICMS * (1 - Redução ICMS / 100)\n"
+        "Base ICMS reduzida = Valor referência ICMS * Percentual base ICMS / 100\n"
+        "Redução ICMS % = 100 - Percentual base ICMS\n"
         "Valor ICMS = Base ICMS reduzida * Alíquota ICMS / 100\n"
         "Alíquota efetiva = (Valor ICMS / Valor total produto) * 100\n"
         "Base ICMS estimada = Valor ICMS / (Alíquota ICMS nominal / 100)\n"

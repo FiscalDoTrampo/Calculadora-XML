@@ -81,13 +81,26 @@ def aplicar_percentual(base: Decimal, percentual: Decimal) -> Decimal:
 
 def calcular_icms_reducao_manual(
     valor_referencia_icms,
-    reducao_icms,
+    percentual_base_icms,
     sugestao_icms: str,
     aliquota_icms_manual,
 ) -> dict:
-    """Calcula ICMS com possível redução de base de cálculo."""
+    """
+    Calcula ICMS a partir do percentual da base que será tributada.
+
+    Regra aplicada neste submódulo:
+    - Base ICMS reduzida = Valor referência ICMS * Percentual base ICMS / 100
+    - Redução ICMS % = 100 - Percentual base ICMS
+    - Valor ICMS = Base ICMS reduzida * Alíquota ICMS / 100
+
+    Exemplo:
+    Valor referência = 155,00
+    Percentual base ICMS = 46,32%
+    Base ICMS reduzida = 155,00 * 46,32% = 71,80
+    Valor ICMS = 71,80 * 19% = 13,64
+    """
     valor_referencia = decimal_manual(valor_referencia_icms, padrao=None)
-    reducao = decimal_manual(reducao_icms)
+    percentual_base = decimal_manual(percentual_base_icms)
     aliquota_icms = resolver_aliquota_icms(sugestao_icms, aliquota_icms_manual)
 
     if valor_referencia is None or valor_referencia <= ZERO:
@@ -95,23 +108,24 @@ def calcular_icms_reducao_manual(
             "Informe um Valor referência ICMS maior que zero para calcular."
         )
 
-    if reducao < ZERO:
-        raise CalculoManualInvalido("A redução de ICMS não pode ser negativa.")
+    if percentual_base < ZERO:
+        raise CalculoManualInvalido("O percentual da base ICMS não pode ser negativo.")
 
-    if reducao > CEM:
-        raise CalculoManualInvalido("A redução de ICMS não pode ser maior que 100%.")
+    if percentual_base > CEM:
+        raise CalculoManualInvalido("O percentual da base ICMS não pode ser maior que 100%.")
 
     if aliquota_icms <= ZERO:
         raise CalculoManualInvalido("Informe uma Alíquota ICMS maior que zero.")
 
-    percentual_base_reduzida = CEM - reducao
-    base_icms = aplicar_percentual(valor_referencia, percentual_base_reduzida)
+    base_icms = aplicar_percentual(valor_referencia, percentual_base)
     valor_reducao = valor_referencia - base_icms
+    reducao = CEM - percentual_base
     valor_icms = aplicar_percentual(base_icms, aliquota_icms)
     aliquota_efetiva_icms = (valor_icms / valor_referencia) * CEM
 
     return {
         "Valor referência ICMS": arredondar_2(valor_referencia),
+        "Percentual base ICMS %": arredondar_4(percentual_base),
         "Redução ICMS %": arredondar_4(reducao),
         "Valor redução ICMS": arredondar_2(valor_reducao),
         "Base ICMS reduzida": arredondar_2(base_icms),
@@ -242,7 +256,7 @@ def calcular_reducao_por_valor_icms(
 
 def calcular_calculos_manuais(
     valor_referencia_icms,
-    reducao_icms,
+    percentual_base_icms,
     sugestao_icms: str,
     aliquota_icms_manual,
     base_ipi,
@@ -253,10 +267,11 @@ def calcular_calculos_manuais(
     aliquota_cofins_manual,
 ) -> dict:
     """
-    Calcula ICMS, redução de base, IPI, PIS e COFINS a partir de campos manuais.
+    Calcula ICMS, base reduzida, IPI, PIS e COFINS a partir de campos manuais.
 
     Regras principais:
-    - Base ICMS reduzida = Valor referência ICMS * (1 - Redução / 100)
+    - Base ICMS reduzida = Valor referência ICMS * Percentual base ICMS / 100
+    - Redução ICMS % = 100 - Percentual base ICMS
     - ICMS = Base ICMS reduzida * Alíquota ICMS / 100
     - IPI = Base IPI * Alíquota IPI / 100
     - Base PIS/COFINS, quando vazia, usa Valor referência ICMS - ICMS
@@ -268,22 +283,22 @@ def calcular_calculos_manuais(
             "Informe um Valor referência ICMS maior que zero para calcular."
         )
 
-    reducao = decimal_manual(reducao_icms)
+    percentual_base = decimal_manual(percentual_base_icms)
     aliquota_icms = resolver_aliquota_icms(sugestao_icms, aliquota_icms_manual)
     aliquota_ipi_dec = decimal_manual(aliquota_ipi)
 
-    if reducao < ZERO:
-        raise CalculoManualInvalido("A redução de ICMS não pode ser negativa.")
+    if percentual_base < ZERO:
+        raise CalculoManualInvalido("O percentual da base ICMS não pode ser negativo.")
 
-    if reducao > CEM:
-        raise CalculoManualInvalido("A redução de ICMS não pode ser maior que 100%.")
+    if percentual_base > CEM:
+        raise CalculoManualInvalido("O percentual da base ICMS não pode ser maior que 100%.")
 
     if aliquota_icms < ZERO or aliquota_ipi_dec < ZERO:
         raise CalculoManualInvalido("As alíquotas não podem ser negativas.")
 
-    percentual_base_reduzida = CEM - reducao
-    base_icms = aplicar_percentual(valor_referencia, percentual_base_reduzida)
+    base_icms = aplicar_percentual(valor_referencia, percentual_base)
     valor_reducao = valor_referencia - base_icms
+    reducao = CEM - percentual_base
     valor_icms = aplicar_percentual(base_icms, aliquota_icms)
     aliquota_efetiva_icms = (valor_icms / valor_referencia) * CEM
 
@@ -316,6 +331,7 @@ def calcular_calculos_manuais(
 
     return {
         "Valor referência ICMS": arredondar_2(valor_referencia),
+        "Percentual base ICMS %": arredondar_4(percentual_base),
         "Redução ICMS %": arredondar_4(reducao),
         "Valor redução ICMS": arredondar_2(valor_reducao),
         "Base ICMS reduzida": arredondar_2(base_icms),
