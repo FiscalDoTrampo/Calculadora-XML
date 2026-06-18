@@ -4,7 +4,14 @@ import xml.etree.ElementTree as ET
 from decimal import Decimal
 from typing import Iterable, Optional
 
-from .calculos import arredondar_2, calcular_predbc, para_decimal
+from .calculos import (
+    CRITERIO_REFERENCIA_PADRAO,
+    arredondar_2,
+    calcular_predbc,
+    calcular_valor_referencia_icms,
+    descricao_criterio_referencia_icms,
+    para_decimal,
+)
 
 
 def nome_local(tag: str) -> str:
@@ -175,7 +182,11 @@ def calcular_base_pis_cofins(valor_produto: Optional[Decimal], vicms: str) -> Op
     return valor_produto - vicms_dec
 
 
-def parsear_xml_nfe(conteudo_xml: bytes | str, nome_arquivo: str = "") -> list[dict]:
+def parsear_xml_nfe(
+    conteudo_xml: bytes | str,
+    nome_arquivo: str = "",
+    criterio_referencia_icms: str = CRITERIO_REFERENCIA_PADRAO,
+) -> list[dict]:
     """Lê um XML de NF-e e retorna uma lista de itens extraídos.
 
     O XML original não é modificado. A leitura é feita apenas em memória.
@@ -193,6 +204,7 @@ def parsear_xml_nfe(conteudo_xml: bytes | str, nome_arquivo: str = "") -> list[d
     chave = extrair_chave(inf_nfe, raiz)
     cnpj_emitente = texto(emit, "CNPJ") or texto(emit, "CPF")
     nome_emitente = texto(emit, "xNome")
+    descricao_criterio = descricao_criterio_referencia_icms(criterio_referencia_icms)
 
     linhas: list[dict] = []
 
@@ -205,15 +217,30 @@ def parsear_xml_nfe(conteudo_xml: bytes | str, nome_arquivo: str = "") -> list[d
 
         qtrib = texto(produto, "qTrib")
         vuntrib = texto(produto, "vUnTrib")
+        vprod = texto(produto, "vProd", "0") or "0"
+        vfrete = texto(produto, "vFrete", "0") or "0"
+        vseg = texto(produto, "vSeg", "0") or "0"
         voutro = texto(produto, "vOutro", "0") or "0"
-        vprod = texto(produto, "vProd")
+        vdesc = texto(produto, "vDesc", "0") or "0"
 
         vbc = texto(grupo_icms, "vBC")
         picms = texto(grupo_icms, "pICMS")
         vicms = texto(grupo_icms, "vICMS")
         predbc_xml = texto(grupo_icms, "pRedBC")
+
+        valor_referencia_icms = calcular_valor_referencia_icms(
+            qtrib=qtrib,
+            vuntrib=vuntrib,
+            vprod=vprod,
+            vfrete=vfrete,
+            vseg=vseg,
+            voutro=voutro,
+            vdesc=vdesc,
+            criterio=criterio_referencia_icms,
+        )
         predbc_calculado = calcular_predbc(
-            vbc=vbc, qtrib=qtrib, vuntrib=vuntrib, voutro=voutro
+            vbc=vbc,
+            valor_referencia_icms=valor_referencia_icms,
         )
 
         valor_produto = calcular_valor_produto(qtrib=qtrib, vuntrib=vuntrib, vprod=vprod)
@@ -246,7 +273,13 @@ def parsear_xml_nfe(conteudo_xml: bytes | str, nome_arquivo: str = "") -> list[d
                 if para_decimal(vuntrib) is not None
                 else None,
                 "Valor produto": decimal_para_float(valor_produto),
+                "vProd": decimal_2_para_float(vprod),
+                "vFrete": decimal_2_para_float(vfrete),
+                "vSeg": decimal_2_para_float(vseg),
+                "vDesc": decimal_2_para_float(vdesc),
                 "vOutro": decimal_2_para_float(voutro),
+                "Valor referência ICMS": decimal_para_float(valor_referencia_icms),
+                "Critério referência ICMS": descricao_criterio,
                 "vBC": decimal_2_para_float(vbc),
                 "pICMS": decimal_2_para_float(picms),
                 "vICMS": decimal_2_para_float(vicms),
@@ -263,7 +296,7 @@ def parsear_xml_nfe(conteudo_xml: bytes | str, nome_arquivo: str = "") -> list[d
                 "Valor COFINS XML": decimal_2_para_float(
                     texto(grupo_cofins, "vCOFINS")
                 ),
-                "pRedBC XML": decimal_2_para_float(predbc_xml),
+                "pRedBC XML": decimal_4_para_float(predbc_xml),
                 "pRedBC calculado": float(predbc_calculado)
                 if isinstance(predbc_calculado, Decimal)
                 else None,
@@ -273,13 +306,22 @@ def parsear_xml_nfe(conteudo_xml: bytes | str, nome_arquivo: str = "") -> list[d
     return linhas
 
 
-def parsear_varios_xmls(arquivos: Iterable) -> list[dict]:
+def parsear_varios_xmls(
+    arquivos: Iterable,
+    criterio_referencia_icms: str = CRITERIO_REFERENCIA_PADRAO,
+) -> list[dict]:
     """Lê vários arquivos enviados pelo Streamlit."""
     resultado: list[dict] = []
 
     for arquivo in arquivos:
         conteudo = arquivo.getvalue()
         nome_arquivo = getattr(arquivo, "name", "")
-        resultado.extend(parsear_xml_nfe(conteudo, nome_arquivo=nome_arquivo))
+        resultado.extend(
+            parsear_xml_nfe(
+                conteudo,
+                nome_arquivo=nome_arquivo,
+                criterio_referencia_icms=criterio_referencia_icms,
+            )
+        )
 
     return resultado

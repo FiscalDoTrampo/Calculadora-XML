@@ -3,6 +3,16 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from src.calculos import CRITERIO_REFERENCIA_PADRAO
+from src.calculos_manuais import (
+    ALIQUOTAS_ICMS_SUGERIDAS,
+    ALIQUOTAS_PIS_COFINS_SUGERIDAS,
+    CalculoManualInvalido,
+    calcular_icms_reducao_manual,
+    calcular_ipi_manual,
+    calcular_pis_cofins_manual,
+    calcular_reducao_por_valor_icms,
+)
 from src.nfe_parser import parsear_varios_xmls
 from src.simulador_desmembramento import simular_desmembramento
 
@@ -28,8 +38,19 @@ MENU_PAGINAS = [
     "Dashboard",
     "Resultado XML",
     "Simulador",
+    "Cálculos Manuais",
     "Fórmulas",
 ]
+
+
+CRITERIOS_PREDBC = {
+    "Valor da operação": "valor_operacao",
+    "Quantidade x unitário + vOutro": "quantidade_unitario",
+    "Somente vProd": "somente_vprod",
+}
+
+
+CRITERIO_PREDBC_PADRAO_LABEL = "Valor da operação"
 
 
 def aplicar_css_global():
@@ -285,6 +306,17 @@ def aplicar_css_global():
                 color: rgba(255,255,255,0.72);
                 font-size: 0.98rem;
                 max-width: 880px;
+            }
+
+
+            .login-form-spacer {
+                height: 8rem;
+            }
+
+            @media (max-height: 820px) {
+                .login-form-spacer {
+                    height: 5.5rem;
+                }
             }
 
             .metric-card {
@@ -543,6 +575,8 @@ def tela_login():
         "Informe usuário e senha para acessar a calculadora fiscal.",
     )
 
+    st.markdown('<div class="login-form-spacer"></div>', unsafe_allow_html=True)
+
     col_esq, col_centro, col_dir = st.columns([1, 1.15, 1])
 
     with col_centro:
@@ -608,7 +642,18 @@ def config_colunas_resultado_xml():
         "qTrib": st.column_config.NumberColumn("qTrib", format="%.4f"),
         "vUnTrib": st.column_config.NumberColumn("vUnTrib", format="%.6f"),
         "Valor produto": st.column_config.NumberColumn("Valor produto", format="%.2f"),
+        "vProd": st.column_config.NumberColumn("vProd", format="%.2f"),
+        "vFrete": st.column_config.NumberColumn("vFrete", format="%.2f"),
+        "vSeg": st.column_config.NumberColumn("vSeg", format="%.2f"),
+        "vDesc": st.column_config.NumberColumn("vDesc", format="%.2f"),
         "vOutro": st.column_config.NumberColumn("vOutro", format="%.2f"),
+        "Valor referência ICMS": st.column_config.NumberColumn(
+            "Valor referência ICMS",
+            format="%.2f",
+        ),
+        "Critério referência ICMS": st.column_config.TextColumn(
+            "Critério referência ICMS"
+        ),
         "vBC": st.column_config.NumberColumn("vBC", format="%.2f"),
         "pICMS": st.column_config.NumberColumn("pICMS", format="%.2f"),
         "vICMS": st.column_config.NumberColumn("vICMS", format="%.2f"),
@@ -651,10 +696,32 @@ def config_colunas_simulador():
         "Quantidade": st.column_config.NumberColumn("Quantidade", format="%.4f"),
         "vUnTrib": st.column_config.NumberColumn("vUnTrib", format="%.6f"),
         "Valor produto": st.column_config.NumberColumn("Valor produto", format="%.2f"),
-        "vOutro": st.column_config.NumberColumn("vOutro", format="%.2f"),
-        "Valor referência": st.column_config.NumberColumn(
-            "Valor referência",
+        "vProd proporcional": st.column_config.NumberColumn(
+            "vProd proporcional",
             format="%.2f",
+        ),
+        "vFrete proporcional": st.column_config.NumberColumn(
+            "vFrete proporcional",
+            format="%.2f",
+        ),
+        "vSeg proporcional": st.column_config.NumberColumn(
+            "vSeg proporcional",
+            format="%.2f",
+        ),
+        "vDesc proporcional": st.column_config.NumberColumn(
+            "vDesc proporcional",
+            format="%.2f",
+        ),
+        "vOutro proporcional": st.column_config.NumberColumn(
+            "vOutro proporcional",
+            format="%.2f",
+        ),
+        "Valor referência ICMS": st.column_config.NumberColumn(
+            "Valor referência ICMS",
+            format="%.2f",
+        ),
+        "Critério referência ICMS": st.column_config.TextColumn(
+            "Critério referência ICMS"
         ),
         "vBC": st.column_config.NumberColumn("vBC", format="%.2f"),
         "pICMS": st.column_config.NumberColumn("pICMS", format="%.2f"),
@@ -698,7 +765,24 @@ def config_colunas_simulador():
 def preparar_dataframe(linhas):
     df = pd.DataFrame(linhas)
 
-    for coluna in ["pRedBC XML", "pRedBC calculado"]:
+    colunas_numericas = [
+        "qTrib",
+        "vUnTrib",
+        "Valor produto",
+        "vProd",
+        "vFrete",
+        "vSeg",
+        "vDesc",
+        "vOutro",
+        "Valor referência ICMS",
+        "vBC",
+        "pICMS",
+        "vICMS",
+        "pRedBC XML",
+        "pRedBC calculado",
+    ]
+
+    for coluna in colunas_numericas:
         if coluna in df.columns:
             df[coluna] = pd.to_numeric(df[coluna], errors="coerce")
 
@@ -775,7 +859,20 @@ def render_sidebar_inicio():
             key="uploader_xml_nfe",
         )
 
-        return pagina, arquivos_xml
+        st.divider()
+        st.caption("Cálculo ICMS")
+        criterio_label = st.selectbox(
+            "Critério do pRedBC",
+            options=list(CRITERIOS_PREDBC.keys()),
+            index=list(CRITERIOS_PREDBC.keys()).index(CRITERIO_PREDBC_PADRAO_LABEL),
+            key="criterio_predbc",
+        )
+        criterio_referencia_icms = CRITERIOS_PREDBC.get(
+            criterio_label,
+            CRITERIO_REFERENCIA_PADRAO,
+        )
+
+        return pagina, arquivos_xml, criterio_referencia_icms
 
 
 def render_sidebar_filtros(df):
@@ -1039,7 +1136,7 @@ def render_resultado_xml(df):
         )
 
 
-def render_simulador(df):
+def render_simulador(df, criterio_referencia_icms):
     render_topo(
         "Simulador de desmembramento",
         "Selecione um item da NF-e e informe a quantidade que será desmembrada. O sistema calcula valores proporcionais de ICMS, PIS e COFINS.",
@@ -1053,6 +1150,11 @@ def render_simulador(df):
         "qTrib",
         "vUnTrib",
         "Valor produto",
+        "vProd",
+        "vFrete",
+        "vSeg",
+        "vDesc",
+        "vOutro",
         "vBC",
         "pICMS",
         "vICMS",
@@ -1111,6 +1213,10 @@ def render_simulador(df):
 
     render_section_header(
         "Dados originais do item", "Principais valores usados na simulação."
+    )
+    st.caption(
+        "Critério de pRedBC em uso: "
+        f"{item_original.get('Critério referência ICMS', 'Valor da operação')}"
     )
 
     col_a, col_b, col_c, col_d, col_e, col_f = st.columns(6)
@@ -1173,6 +1279,7 @@ def render_simulador(df):
             resultado_simulacao = simular_desmembramento(
                 item_original=item_original,
                 quantidade_desmembrada=quantidade_desmembrada,
+                criterio_referencia_icms=criterio_referencia_icms,
             )
 
             df_resultado_simulacao = pd.DataFrame(resultado_simulacao)
@@ -1195,6 +1302,434 @@ def render_simulador(df):
             st.error(f"Erro ao simular desmembramento: {erro}")
 
 
+def formatar_valor_resultado_manual(campo: str, valor) -> str:
+    """Formata valores do módulo manual para exibição limpa."""
+    if campo == "Situação":
+        return str(valor)
+
+    if "p.p." in campo:
+        return f"{formatar_numero(valor, 4)} p.p."
+
+    if "%" in campo:
+        return f"{formatar_numero(valor, 4)}%"
+
+    if campo.startswith(("Valor", "Base", "Total")):
+        return f"R$ {formatar_numero(valor)}"
+
+    return str(valor)
+
+
+def render_tabela_resultado_manual(resultado: dict, grupo: str, nome_arquivo: str):
+    linhas = [
+        {
+            "Grupo": grupo,
+            "Campo": campo,
+            "Valor": formatar_valor_resultado_manual(campo, valor),
+        }
+        for campo, valor in resultado.items()
+    ]
+
+    df_resultado = pd.DataFrame(linhas)
+    st.dataframe(df_resultado, use_container_width=True, hide_index=True)
+
+    csv = df_resultado.to_csv(index=False, sep=";", encoding="utf-8-sig")
+    st.download_button(
+        "Baixar resultado em CSV",
+        data=csv,
+        file_name=nome_arquivo,
+        mime="text/csv",
+        use_container_width=True,
+    )
+
+
+def render_submodulo_icms_reducao():
+    render_section_header(
+        "ICMS com redução de base",
+        "Informe o valor de referência, a redução da base e a alíquota nominal do ICMS.",
+    )
+
+    with st.form("form_manual_icms_reducao"):
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            valor_referencia_icms = st.text_input(
+                "Valor referência ICMS",
+                placeholder="Ex.: 1000,00",
+                key="manual_icms_valor_referencia",
+            )
+
+        with col2:
+            reducao_icms = st.text_input(
+                "Redução de base ICMS (%)",
+                placeholder="Ex.: 20,00",
+                key="manual_icms_reducao",
+            )
+
+        with col3:
+            sugestao_icms = st.selectbox(
+                "Sugestão alíquota ICMS",
+                options=list(ALIQUOTAS_ICMS_SUGERIDAS.keys()) + ["Manual"],
+                index=0,
+                key="manual_icms_sugestao",
+            )
+
+        with col4:
+            aliquota_icms_manual = st.text_input(
+                "Alíquota ICMS manual (%)",
+                placeholder="Vazio = sugestão",
+                key="manual_icms_aliquota_manual",
+            )
+
+        calcular = st.form_submit_button(
+            "Calcular ICMS", type="primary", use_container_width=True
+        )
+
+    if not calcular:
+        st.info("Preencha os campos do ICMS e clique em Calcular ICMS.")
+        return
+
+    try:
+        resultado = calcular_icms_reducao_manual(
+            valor_referencia_icms=valor_referencia_icms,
+            reducao_icms=reducao_icms,
+            sugestao_icms=sugestao_icms,
+            aliquota_icms_manual=aliquota_icms_manual,
+        )
+    except CalculoManualInvalido as erro:
+        st.error(str(erro))
+        return
+    except Exception as erro:
+        st.error(f"Erro ao calcular ICMS manualmente: {erro}")
+        return
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        render_metric_card(
+            "Base ICMS reduzida",
+            f"R$ {formatar_numero(resultado.get('Base ICMS reduzida'))}",
+            f"Redução: {formatar_numero(resultado.get('Redução ICMS %'), 4)}%",
+        )
+    with col2:
+        render_metric_card(
+            "Valor ICMS",
+            f"R$ {formatar_numero(resultado.get('Valor ICMS'))}",
+            f"Alíquota: {formatar_numero(resultado.get('Alíquota ICMS %'), 4)}%",
+        )
+    with col3:
+        render_metric_card(
+            "Valor reduzido",
+            f"R$ {formatar_numero(resultado.get('Valor redução ICMS'))}",
+            "Diferença entre referência e base reduzida",
+        )
+    with col4:
+        render_metric_card(
+            "Alíquota efetiva",
+            f"{formatar_numero(resultado.get('Alíquota efetiva ICMS %'), 4)}%",
+            "Percentual final sobre o valor de referência",
+        )
+
+    render_tabela_resultado_manual(
+        resultado,
+        grupo="ICMS",
+        nome_arquivo="calculo_manual_icms.csv",
+    )
+
+
+def render_submodulo_aliquota_efetiva():
+    render_section_header(
+        "Alíquota efetiva e pRedBC equivalente",
+        "Use quando você tem o valor total do produto e o valor do ICMS destacado.",
+    )
+
+    with st.form("form_manual_aliquota_efetiva"):
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            valor_total_produto = st.text_input(
+                "Valor total do produto",
+                placeholder="Ex.: 967,20",
+                key="manual_efetiva_valor_total_produto",
+            )
+
+        with col2:
+            valor_icms = st.text_input(
+                "Valor do ICMS",
+                placeholder="Ex.: 96,72",
+                key="manual_efetiva_valor_icms",
+            )
+
+        with col3:
+            sugestao_icms = st.selectbox(
+                "Alíquota ICMS nominal",
+                options=list(ALIQUOTAS_ICMS_SUGERIDAS.keys()) + ["Manual"],
+                index=0,
+                key="manual_efetiva_sugestao_icms",
+            )
+
+        with col4:
+            aliquota_icms_manual = st.text_input(
+                "Alíquota nominal manual (%)",
+                placeholder="Vazio = sugestão",
+                key="manual_efetiva_aliquota_icms_manual",
+            )
+
+        calcular = st.form_submit_button(
+            "Calcular alíquota efetiva", type="primary", use_container_width=True
+        )
+
+    if not calcular:
+        st.info("Preencha o valor total, o ICMS destacado e clique em Calcular alíquota efetiva.")
+        return
+
+    try:
+        resultado = calcular_reducao_por_valor_icms(
+            valor_total_produto=valor_total_produto,
+            valor_icms=valor_icms,
+            sugestao_icms=sugestao_icms,
+            aliquota_icms_manual=aliquota_icms_manual,
+        )
+    except CalculoManualInvalido as erro:
+        st.error(str(erro))
+        return
+    except Exception as erro:
+        st.error(f"Erro ao calcular alíquota efetiva: {erro}")
+        return
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        render_metric_card(
+            "Alíquota efetiva",
+            f"{formatar_numero(resultado.get('Alíquota efetiva ICMS %'), 4)}%",
+            "Percentual real do ICMS destacado",
+        )
+    with col2:
+        render_metric_card(
+            "pRedBC equivalente",
+            f"{formatar_numero(resultado.get('pRedBC equivalente %'), 4)}%",
+            "Redução de base equivalente",
+        )
+    with col3:
+        render_metric_card(
+            "Base ICMS estimada",
+            f"R$ {formatar_numero(resultado.get('Base ICMS estimada'))}",
+            "Base aproximada para o ICMS informado",
+        )
+    with col4:
+        render_metric_card(
+            "Redução da alíquota",
+            f"{formatar_numero(resultado.get('Redução da alíquota em p.p.'), 4)} p.p.",
+            "Diferença entre nominal e efetiva",
+        )
+
+    st.success(
+        "Leitura fiscal: redução de "
+        f"{formatar_numero(resultado.get('Alíquota ICMS nominal %'), 4)}% para "
+        f"{formatar_numero(resultado.get('Alíquota efetiva ICMS %'), 4)}%. "
+        f"pRedBC equivalente: {formatar_numero(resultado.get('pRedBC equivalente %'), 4)}%."
+    )
+
+    render_tabela_resultado_manual(
+        resultado,
+        grupo="Alíquota efetiva",
+        nome_arquivo="calculo_manual_aliquota_efetiva.csv",
+    )
+
+
+def render_submodulo_ipi():
+    render_section_header(
+        "IPI",
+        "Informe a base e a alíquota do IPI. A alíquota deve ser definida conforme o produto/NCM.",
+    )
+
+    with st.form("form_manual_ipi"):
+        col1, col2 = st.columns(2)
+
+        with col1:
+            base_ipi = st.text_input(
+                "Base IPI",
+                placeholder="Ex.: 1000,00",
+                key="manual_ipi_base",
+            )
+
+        with col2:
+            aliquota_ipi = st.text_input(
+                "Alíquota IPI (%)",
+                placeholder="Ex.: 5,00",
+                key="manual_ipi_aliquota",
+            )
+
+        calcular = st.form_submit_button(
+            "Calcular IPI", type="primary", use_container_width=True
+        )
+
+    if not calcular:
+        st.info("Preencha a base e a alíquota para calcular o IPI.")
+        return
+
+    try:
+        resultado = calcular_ipi_manual(base_ipi=base_ipi, aliquota_ipi=aliquota_ipi)
+    except CalculoManualInvalido as erro:
+        st.error(str(erro))
+        return
+    except Exception as erro:
+        st.error(f"Erro ao calcular IPI manualmente: {erro}")
+        return
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        render_metric_card(
+            "Valor IPI",
+            f"R$ {formatar_numero(resultado.get('Valor IPI'))}",
+            f"Alíquota: {formatar_numero(resultado.get('Alíquota IPI %'), 4)}%",
+        )
+    with col2:
+        render_metric_card(
+            "Total com IPI",
+            f"R$ {formatar_numero(resultado.get('Total com IPI'))}",
+            "Base acrescida do IPI",
+        )
+    with col3:
+        render_metric_card(
+            "Base IPI",
+            f"R$ {formatar_numero(resultado.get('Base IPI'))}",
+            "Base informada manualmente",
+        )
+
+    render_tabela_resultado_manual(
+        resultado,
+        grupo="IPI",
+        nome_arquivo="calculo_manual_ipi.csv",
+    )
+
+
+def render_submodulo_pis_cofins():
+    render_section_header(
+        "PIS e COFINS",
+        "Informe a base e escolha uma sugestão de regime ou preencha as alíquotas manualmente.",
+    )
+
+    with st.form("form_manual_pis_cofins"):
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            base_pis_cofins = st.text_input(
+                "Base PIS/COFINS",
+                placeholder="Ex.: 1000,00",
+                key="manual_piscofins_base",
+            )
+
+        with col2:
+            sugestao_pis_cofins = st.selectbox(
+                "Sugestão PIS/COFINS",
+                options=list(ALIQUOTAS_PIS_COFINS_SUGERIDAS.keys()) + ["Manual"],
+                index=0,
+                key="manual_piscofins_sugestao",
+            )
+
+        with col3:
+            aliquota_pis_manual = st.text_input(
+                "Alíquota PIS manual (%)",
+                placeholder="Vazio = sugestão",
+                key="manual_piscofins_aliquota_pis",
+            )
+
+        with col4:
+            aliquota_cofins_manual = st.text_input(
+                "Alíquota COFINS manual (%)",
+                placeholder="Vazio = sugestão",
+                key="manual_piscofins_aliquota_cofins",
+            )
+
+        calcular = st.form_submit_button(
+            "Calcular PIS/COFINS", type="primary", use_container_width=True
+        )
+
+    if not calcular:
+        st.info("Preencha a base de PIS/COFINS e clique em Calcular PIS/COFINS.")
+        return
+
+    try:
+        resultado = calcular_pis_cofins_manual(
+            sugestao_pis_cofins=sugestao_pis_cofins,
+            base_pis_cofins=base_pis_cofins,
+            aliquota_pis_manual=aliquota_pis_manual,
+            aliquota_cofins_manual=aliquota_cofins_manual,
+        )
+    except CalculoManualInvalido as erro:
+        st.error(str(erro))
+        return
+    except Exception as erro:
+        st.error(f"Erro ao calcular PIS/COFINS manualmente: {erro}")
+        return
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        render_metric_card(
+            "Valor PIS",
+            f"R$ {formatar_numero(resultado.get('Valor PIS'))}",
+            f"Alíquota: {formatar_numero(resultado.get('Alíquota PIS %'), 4)}%",
+        )
+    with col2:
+        render_metric_card(
+            "Valor COFINS",
+            f"R$ {formatar_numero(resultado.get('Valor COFINS'))}",
+            f"Alíquota: {formatar_numero(resultado.get('Alíquota COFINS %'), 4)}%",
+        )
+    with col3:
+        render_metric_card(
+            "Total PIS/COFINS",
+            f"R$ {formatar_numero(resultado.get('Total PIS/COFINS'))}",
+            "Soma dos dois tributos",
+        )
+    with col4:
+        render_metric_card(
+            "Base PIS/COFINS",
+            f"R$ {formatar_numero(resultado.get('Base PIS/COFINS'))}",
+            "Base informada manualmente",
+        )
+
+    render_tabela_resultado_manual(
+        resultado,
+        grupo="PIS/COFINS",
+        nome_arquivo="calculo_manual_pis_cofins.csv",
+    )
+
+
+def render_calculos_manuais():
+    render_topo(
+        "Cálculos Manuais",
+        "Escolha um submódulo e calcule cada tributo separadamente, sem depender de XML.",
+    )
+
+    submodulo = st.radio(
+        "Submódulo",
+        [
+            "ICMS / Redução",
+            "Alíquota efetiva / pRedBC",
+            "IPI",
+            "PIS e COFINS",
+        ],
+        horizontal=True,
+        key="manual_submodulo",
+    )
+
+    st.divider()
+
+    if submodulo == "ICMS / Redução":
+        render_submodulo_icms_reducao()
+    elif submodulo == "Alíquota efetiva / pRedBC":
+        render_submodulo_aliquota_efetiva()
+    elif submodulo == "IPI":
+        render_submodulo_ipi()
+    elif submodulo == "PIS e COFINS":
+        render_submodulo_pis_cofins()
+
+    st.warning(
+        "Observação: os cálculos manuais são simulações. Regime tributário, CST/CSOSN, NCM, benefício fiscal "
+        "e regra específica do produto ainda precisam ser conferidos na análise fiscal."
+    )
+
+
 def render_formulas():
     render_topo(
         "Fórmulas utilizadas",
@@ -1203,13 +1738,42 @@ def render_formulas():
 
     render_section_header("Redução de base ICMS")
     st.code(
-        "pRedBC calculado = 100 - ((vBC / ((qTrib * vUnTrib) + vOutro)) * 100)",
+        "pRedBC calculado = 100 - ((vBC / Valor referência ICMS) * 100)",
         language="text",
     )
-    st.write("Quando `vOutro` não existir no XML, ele é considerado como `0`.")
+    st.write(
+        "O campo `Valor referência ICMS` é recalculado conforme o critério escolhido "
+        "na barra lateral em `Critério do pRedBC`. Campos ausentes no XML, como "
+        "`vFrete`, `vSeg`, `vDesc` ou `vOutro`, são considerados como `0`."
+    )
+
+    render_section_header("Critérios de Valor referência ICMS")
+    st.code(
+        "Critério 1: Quantidade x unitário + vOutro\n"
+        "Valor referência ICMS = qTrib * vUnTrib + vOutro\n\n"
+        "Critério 2: Valor da operação\n"
+        "Valor referência ICMS = vProd + vFrete + vSeg + vOutro - vDesc\n\n"
+        "Critério 3: Somente vProd\n"
+        "Valor referência ICMS = vProd",
+        language="text",
+    )
 
     render_section_header("Base PIS/COFINS calculada")
     st.code("Base PIS/COFINS calculada = Valor produto - vICMS", language="text")
+
+    render_section_header("Cálculos Manuais")
+    st.code(
+        "Base ICMS reduzida = Valor referência ICMS * (1 - Redução ICMS / 100)\n"
+        "Valor ICMS = Base ICMS reduzida * Alíquota ICMS / 100\n"
+        "Alíquota efetiva = (Valor ICMS / Valor total produto) * 100\n"
+        "Base ICMS estimada = Valor ICMS / (Alíquota ICMS nominal / 100)\n"
+        "pRedBC equivalente = 100 - ((Base ICMS estimada / Valor total produto) * 100)\n"
+        "Valor IPI = Base IPI * Alíquota IPI / 100\n"
+        "Base PIS/COFINS automática = Valor referência ICMS - Valor ICMS\n"
+        "Valor PIS = Base PIS/COFINS * Alíquota PIS / 100\n"
+        "Valor COFINS = Base PIS/COFINS * Alíquota COFINS / 100",
+        language="text",
+    )
 
     render_section_header("Simulador proporcional")
     st.code(
@@ -1224,14 +1788,20 @@ aplicar_css_global()
 if not tela_login():
     st.stop()
 
-pagina, arquivos_xml = render_sidebar_inicio()
+pagina, arquivos_xml, criterio_referencia_icms = render_sidebar_inicio()
+
+if pagina == "Cálculos Manuais":
+    render_calculos_manuais()
+    st.stop()
 
 if not arquivos_xml:
     render_estado_inicial()
     st.stop()
 
 try:
-    linhas = parsear_varios_xmls(arquivos_xml)
+    linhas = parsear_varios_xmls(
+        arquivos_xml, criterio_referencia_icms=criterio_referencia_icms
+    )
 except Exception as erro:
     st.error(f"Erro ao processar XML: {erro}")
     st.stop()
@@ -1259,6 +1829,8 @@ if pagina == "Dashboard":
 elif pagina == "Resultado XML":
     render_resultado_xml(df)
 elif pagina == "Simulador":
-    render_simulador(df)
+    render_simulador(df, criterio_referencia_icms)
+elif pagina == "Cálculos Manuais":
+    render_calculos_manuais()
 elif pagina == "Fórmulas":
     render_formulas()

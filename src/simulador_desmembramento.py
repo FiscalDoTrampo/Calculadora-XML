@@ -1,46 +1,15 @@
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from typing import Any, Dict, Optional
 
-DUAS_CASAS = Decimal("0.01")
-QUATRO_CASAS = Decimal("0.0001")
-
-
-def para_decimal(valor) -> Optional[Decimal]:
-    if valor is None:
-        return None
-
-    texto = str(valor).strip()
-
-    if texto == "" or texto.lower() == "nan":
-        return None
-
-    try:
-        return Decimal(texto.replace(",", "."))
-    except Exception:
-        return None
-
-
-def arredondar_2(valor: Optional[Decimal]) -> Optional[Decimal]:
-    if valor is None:
-        return None
-
-    return valor.quantize(DUAS_CASAS, rounding=ROUND_HALF_UP)
-
-
-def arredondar_4(valor: Optional[Decimal]) -> Optional[Decimal]:
-    if valor is None:
-        return None
-
-    return valor.quantize(QUATRO_CASAS, rounding=ROUND_HALF_UP)
-
-
-def calcular_reducao(vbc: Decimal, valor_referencia: Decimal) -> Optional[Decimal]:
-    if valor_referencia is None or valor_referencia == 0:
-        return None
-
-    percentual = Decimal("100") - ((vbc / valor_referencia) * Decimal("100"))
-
-    return arredondar_4(percentual)
+from .calculos import (
+    CRITERIO_REFERENCIA_PADRAO,
+    arredondar_2,
+    arredondar_4,
+    calcular_predbc,
+    calcular_valor_referencia_icms,
+    descricao_criterio_referencia_icms,
+    para_decimal,
+)
 
 
 def calcular_valor_tributo(
@@ -68,6 +37,17 @@ def valor_float_ou_none(valor: Optional[Decimal], casas: int = 2) -> Optional[fl
     return float(arredondar_2(valor))
 
 
+def obter_decimal_item(
+    item_original: Dict[str, Any],
+    coluna: str,
+    padrao: Decimal = Decimal("0"),
+) -> Decimal:
+    valor = para_decimal(item_original.get(coluna))
+    if valor is None:
+        return padrao
+    return valor
+
+
 def obter_valor_produto_original(
     item_original: Dict[str, Any],
     quantidade_original: Decimal,
@@ -90,15 +70,20 @@ def montar_linha_simulada(
     tipo: str,
     quantidade: Decimal,
     quantidade_original: Decimal,
+    criterio_referencia_icms: str = CRITERIO_REFERENCIA_PADRAO,
 ) -> Dict[str, Any]:
 
     fator = quantidade / quantidade_original
 
-    vuntrib = para_decimal(item_original.get("vUnTrib")) or Decimal("0")
-    voutro_original = para_decimal(item_original.get("vOutro")) or Decimal("0")
-    vbc_original = para_decimal(item_original.get("vBC")) or Decimal("0")
-    vicms_original = para_decimal(item_original.get("vICMS")) or Decimal("0")
-    picms = para_decimal(item_original.get("pICMS")) or Decimal("0")
+    vuntrib = obter_decimal_item(item_original, "vUnTrib")
+    vprod_original = obter_decimal_item(item_original, "vProd")
+    vfrete_original = obter_decimal_item(item_original, "vFrete")
+    vseg_original = obter_decimal_item(item_original, "vSeg")
+    voutro_original = obter_decimal_item(item_original, "vOutro")
+    vdesc_original = obter_decimal_item(item_original, "vDesc")
+    vbc_original = obter_decimal_item(item_original, "vBC")
+    vicms_original = obter_decimal_item(item_original, "vICMS")
+    picms = obter_decimal_item(item_original, "pICMS")
     predbc_xml = para_decimal(item_original.get("pRedBC XML"))
 
     valor_produto_original = obter_valor_produto_original(
@@ -108,8 +93,22 @@ def montar_linha_simulada(
     )
 
     valor_produto = valor_produto_original * fator
+    vprod = vprod_original * fator
+    vfrete = vfrete_original * fator
+    vseg = vseg_original * fator
     voutro = voutro_original * fator
-    valor_referencia = valor_produto + voutro
+    vdesc = vdesc_original * fator
+
+    valor_referencia_icms = calcular_valor_referencia_icms(
+        qtrib=quantidade,
+        vuntrib=vuntrib,
+        vprod=vprod,
+        vfrete=vfrete,
+        vseg=vseg,
+        voutro=voutro,
+        vdesc=vdesc,
+        criterio=criterio_referencia_icms,
+    )
 
     vbc = vbc_original * fator
     vicms = vicms_original * fator
@@ -155,7 +154,11 @@ def montar_linha_simulada(
     else:
         vcofins_xml = calcular_valor_tributo(base_cofins_xml, pcofins_xml)
 
-    predbc_calculado = calcular_reducao(vbc, valor_referencia)
+    predbc_calculado = calcular_predbc(
+        vbc=vbc,
+        valor_referencia_icms=valor_referencia_icms,
+    )
+    descricao_criterio = descricao_criterio_referencia_icms(criterio_referencia_icms)
 
     return {
         "Tipo": tipo,
@@ -172,8 +175,13 @@ def montar_linha_simulada(
         "Quantidade": float(arredondar_4(quantidade)),
         "vUnTrib": float(arredondar_4(vuntrib)),
         "Valor produto": float(arredondar_2(valor_produto)),
-        "vOutro": float(arredondar_2(voutro)),
-        "Valor referência": float(arredondar_2(valor_referencia)),
+        "vProd proporcional": float(arredondar_2(vprod)),
+        "vFrete proporcional": float(arredondar_2(vfrete)),
+        "vSeg proporcional": float(arredondar_2(vseg)),
+        "vDesc proporcional": float(arredondar_2(vdesc)),
+        "vOutro proporcional": float(arredondar_2(voutro)),
+        "Valor referência ICMS": valor_float_ou_none(valor_referencia_icms),
+        "Critério referência ICMS": descricao_criterio,
         "vBC": float(arredondar_2(vbc)),
         "pICMS": float(arredondar_2(picms)),
         "vICMS": float(arredondar_2(vicms)),
@@ -196,6 +204,7 @@ def montar_linha_simulada(
 def simular_desmembramento(
     item_original: Dict[str, Any],
     quantidade_desmembrada,
+    criterio_referencia_icms: str = CRITERIO_REFERENCIA_PADRAO,
 ) -> list[Dict[str, Any]]:
 
     quantidade_original = para_decimal(item_original.get("qTrib"))
@@ -222,6 +231,7 @@ def simular_desmembramento(
             tipo="DESMEMBRADO",
             quantidade=quantidade_desmembrada,
             quantidade_original=quantidade_original,
+            criterio_referencia_icms=criterio_referencia_icms,
         )
     )
 
@@ -232,6 +242,7 @@ def simular_desmembramento(
                 tipo="RESTANTE",
                 quantidade=quantidade_restante,
                 quantidade_original=quantidade_original,
+                criterio_referencia_icms=criterio_referencia_icms,
             )
         )
 
