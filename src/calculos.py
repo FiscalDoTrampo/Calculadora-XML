@@ -1,6 +1,8 @@
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Optional
 
+CRITERIO_REFERENCIA_PADRAO = "valor_operacao"
+
 DUAS_CASAS = Decimal("0.01")
 QUATRO_CASAS = Decimal("0.0001")
 
