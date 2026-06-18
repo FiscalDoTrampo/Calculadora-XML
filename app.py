@@ -1,13 +1,20 @@
+from pathlib import Path
+
 import pandas as pd
 import streamlit as st
 
 from src.nfe_parser import parsear_varios_xmls
 from src.simulador_desmembramento import simular_desmembramento
 
+BASE_DIR = Path(__file__).resolve().parent
+SIMBOLO_SITE_PATH = BASE_DIR / "assets" / "simbolo_site.png"
+PAGE_ICON = str(SIMBOLO_SITE_PATH) if SIMBOLO_SITE_PATH.exists() else "🧾"
+
 st.set_page_config(
-    page_title="Calculadora Redução",
-    page_icon="🧮",
+    page_title="Calculadora Fiscal",
+    page_icon=PAGE_ICON,
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 
@@ -15,6 +22,500 @@ USUARIOS = {
     "admin": "112211bb",
     "guilherme": "112211bb",
 }
+
+
+MENU_PAGINAS = [
+    "Dashboard",
+    "Resultado XML",
+    "Simulador",
+    "Fórmulas",
+]
+
+
+def aplicar_css_global():
+    st.markdown(
+        """
+        <style>
+            :root {
+                --bg-main: #F4F7FB;
+                --sidebar-start: #050A1A;
+                --sidebar-end: #0F1E45;
+                --card: #FFFFFF;
+                --card-soft: #F7F9FC;
+                --text-main: #1F2937;
+                --text-muted: #6B7280;
+                --border: #E5E7EB;
+                --primary: #2563EB;
+                --success: #22C55E;
+                --warning: #F59E0B;
+                --danger: #EF4444;
+            }
+
+            .stApp {
+                background: var(--bg-main);
+            }
+
+            .block-container {
+                padding-top: 3.10rem;
+                padding-bottom: 2rem;
+                max-width: 1500px;
+            }
+
+            [data-testid="stSidebar"] {
+                background: linear-gradient(180deg, var(--sidebar-start) 0%, var(--sidebar-end) 100%);
+                border-right: 1px solid rgba(255,255,255,0.08);
+            }
+
+            [data-testid="stSidebar"] * {
+                color: rgba(255,255,255,0.92);
+            }
+
+            [data-testid="stSidebar"] label,
+            [data-testid="stSidebar"] .stCaptionContainer,
+            [data-testid="stSidebar"] small {
+                color: rgba(255,255,255,0.68) !important;
+            }
+
+            [data-testid="stSidebar"] hr {
+                border-color: rgba(255,255,255,0.12);
+            }
+
+            [data-testid="stSidebar"] div[role="radiogroup"] label {
+                background: rgba(255,255,255,0.06);
+                border: 1px solid rgba(255,255,255,0.09);
+                border-radius: 14px;
+                padding: 0.48rem 0.65rem;
+                margin-bottom: 0.35rem;
+                transition: 0.16s ease;
+            }
+
+            [data-testid="stSidebar"] div[role="radiogroup"] label:hover {
+                background: rgba(255,255,255,0.12);
+                border-color: rgba(255,255,255,0.18);
+            }
+
+            [data-testid="stSidebar"] .stButton > button {
+                width: 100%;
+                border-radius: 12px;
+                background: rgba(255,255,255,0.08);
+                border: 1px solid rgba(255,255,255,0.15);
+                color: #FFFFFF;
+            }
+
+            [data-testid="stSidebar"] .stButton > button:hover {
+                background: rgba(255,255,255,0.14);
+                border-color: rgba(255,255,255,0.22);
+                color: #FFFFFF;
+            }
+
+            [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
+                background: rgba(255,255,255,0.07);
+                border: 1px dashed rgba(255,255,255,0.32);
+                border-radius: 16px;
+                padding: 0.9rem 0.75rem;
+            }
+
+            [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button {
+                background: rgba(255,255,255,0.14) !important;
+                border: 1px solid rgba(255,255,255,0.22) !important;
+                border-radius: 10px !important;
+                color: #FFFFFF !important;
+                font-weight: 700 !important;
+            }
+
+            [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button * {
+                color: #FFFFFF !important;
+            }
+
+            [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] small,
+            [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] span,
+            [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] p {
+                color: rgba(255,255,255,0.82) !important;
+            }
+
+            /*
+             * Arquivo XML selecionado no uploader da sidebar.
+             * A correção fica em duas camadas:
+             * 1) quando o Streamlit expõe data-testid do arquivo, usamos o card escuro;
+             * 2) quando a versão renderiza apenas o chip padrão claro, forçamos texto escuro.
+             */
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderFile"],
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stUploadedFile"],
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] div:has([data-testid="stFileUploaderFileData"]),
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] div:has([data-testid="stFileUploaderFileName"]),
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] div:has(button[aria-label*="Remove"]),
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] div:has(button[aria-label*="remover"]),
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] div:has(button[aria-label*="Remover"]),
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] div:has(button[aria-label*="Delete"]),
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] div:has(button[aria-label*="Excluir"]) {
+                background-color: #111827 !important;
+                border-color: rgba(255,255,255,0.22) !important;
+                color: #F8FAFC !important;
+                opacity: 1 !important;
+                box-shadow: none !important;
+            }
+
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderFile"] *,
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stUploadedFile"] *,
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderFileData"] *,
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderFileName"],
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderFileSize"],
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] div:has(button[aria-label*="Remove"]) *,
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] div:has(button[aria-label*="remover"]) *,
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] div:has(button[aria-label*="Remover"]) *,
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] div:has(button[aria-label*="Delete"]) *,
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] div:has(button[aria-label*="Excluir"]) * {
+                color: #F8FAFC !important;
+                fill: #F8FAFC !important;
+                opacity: 1 !important;
+                text-shadow: none !important;
+            }
+
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderFile"] svg,
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderFile"] svg path,
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderDeleteBtn"] svg,
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderDeleteBtn"] svg path {
+                fill: #F8FAFC !important;
+                color: #F8FAFC !important;
+                opacity: 1 !important;
+            }
+
+            /*
+             * Fallback para o chip claro padrão que aparece em algumas versões.
+             * Nessa situação mantemos o fundo claro, mas forçamos o texto para escuro.
+             */
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] [title$=".xml"],
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] [title$=".XML"],
+            [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] [title$=".xml"],
+            [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] [title$=".XML"] {
+                color: #0F172A !important;
+                fill: #0F172A !important;
+                opacity: 1 !important;
+                font-weight: 800 !important;
+                text-shadow: none !important;
+            }
+
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] div:has([title$=".xml"]) *,
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] div:has([title$=".XML"]) *,
+            [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] div:has([title$=".xml"]) *,
+            [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] div:has([title$=".XML"]) * {
+                opacity: 1 !important;
+                text-shadow: none !important;
+            }
+
+            [data-testid="stSidebar"] [data-baseweb="select"] > div {
+                background: #202A46 !important;
+                border: 1px solid rgba(255,255,255,0.18) !important;
+                border-radius: 10px !important;
+                color: #FFFFFF !important;
+                box-shadow: none !important;
+            }
+
+            [data-testid="stSidebar"] [data-baseweb="select"] input,
+            [data-testid="stSidebar"] [data-baseweb="select"] textarea,
+            [data-testid="stSidebar"] [data-baseweb="select"] [contenteditable="true"] {
+                background: transparent !important;
+                color: #FFFFFF !important;
+                box-shadow: none !important;
+            }
+
+            [data-testid="stSidebar"] [data-baseweb="select"] span,
+            [data-testid="stSidebar"] [data-baseweb="select"] div {
+                color: rgba(255,255,255,0.92) !important;
+            }
+
+            [data-testid="stSidebar"] [data-baseweb="select"] svg {
+                fill: rgba(255,255,255,0.80) !important;
+                color: rgba(255,255,255,0.80) !important;
+            }
+
+            [data-testid="stSidebar"] input:not([aria-autocomplete="list"]) {
+                background: #202A46 !important;
+                border-color: rgba(255,255,255,0.18) !important;
+                color: #FFFFFF !important;
+            }
+
+            .sidebar-brand {
+                padding: 0.35rem 0.1rem 0.75rem 0.1rem;
+            }
+
+            .sidebar-title {
+                font-size: 1.25rem;
+                font-weight: 800;
+                letter-spacing: -0.03em;
+                color: #FFFFFF;
+                margin-bottom: 0.2rem;
+            }
+
+            .sidebar-subtitle {
+                font-size: 0.78rem;
+                color: rgba(255,255,255,0.62);
+                line-height: 1.35;
+            }
+
+            .hero-card {
+                background: linear-gradient(135deg, #0B122A 0%, #0F1E45 52%, #163A75 100%);
+                color: #FFFFFF;
+                padding: 1.55rem 1.55rem 1.45rem 1.55rem;
+                border-radius: 24px;
+                border: 1px solid rgba(255,255,255,0.12);
+                box-shadow: 0 16px 42px rgba(11,18,42,0.18);
+                margin-top: 0.35rem;
+                margin-bottom: 1.1rem;
+            }
+
+            .hero-eyebrow {
+                color: rgba(255,255,255,0.66);
+                font-size: 0.78rem;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                font-weight: 700;
+                margin-bottom: 0.35rem;
+            }
+
+            .hero-title {
+                font-size: 2rem;
+                line-height: 1.1;
+                font-weight: 850;
+                letter-spacing: -0.04em;
+                margin-bottom: 0.4rem;
+            }
+
+            .hero-text {
+                color: rgba(255,255,255,0.72);
+                font-size: 0.98rem;
+                max-width: 880px;
+            }
+
+            .metric-card {
+                background: var(--card);
+                border: 1px solid var(--border);
+                border-radius: 20px;
+                padding: 1rem 1.05rem;
+                box-shadow: 0 10px 28px rgba(15,30,69,0.06);
+                min-height: 112px;
+            }
+
+            .metric-label {
+                color: var(--text-muted);
+                font-size: 0.78rem;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+                margin-bottom: 0.25rem;
+            }
+
+            .metric-value {
+                color: var(--text-main);
+                font-size: 1.75rem;
+                font-weight: 850;
+                letter-spacing: -0.04em;
+            }
+
+            .metric-help {
+                color: var(--text-muted);
+                font-size: 0.80rem;
+                margin-top: 0.25rem;
+            }
+
+            .section-card {
+                background: var(--card);
+                border: 1px solid var(--border);
+                border-radius: 22px;
+                padding: 1.1rem 1.2rem;
+                box-shadow: 0 10px 28px rgba(15,30,69,0.05);
+                margin-bottom: 1rem;
+            }
+
+            .section-title {
+                color: var(--text-main);
+                font-size: 1.25rem;
+                font-weight: 800;
+                letter-spacing: -0.03em;
+                margin-bottom: 0.2rem;
+            }
+
+            .section-subtitle {
+                color: var(--text-muted);
+                font-size: 0.9rem;
+                margin-bottom: 0.8rem;
+            }
+
+            .pill-row {
+                display: flex;
+                gap: 0.5rem;
+                flex-wrap: wrap;
+                margin-top: 0.75rem;
+            }
+
+            .pill {
+                background: #EEF2FF;
+                color: #1E3A8A;
+                border: 1px solid #DBEAFE;
+                border-radius: 999px;
+                padding: 0.32rem 0.62rem;
+                font-size: 0.78rem;
+                font-weight: 700;
+            }
+
+            .status-ok {
+                color: #166534;
+                background: #DCFCE7;
+                border: 1px solid #BBF7D0;
+                padding: 0.2rem 0.45rem;
+                border-radius: 999px;
+                font-weight: 700;
+                font-size: 0.78rem;
+            }
+
+            .status-alerta {
+                color: #92400E;
+                background: #FEF3C7;
+                border: 1px solid #FDE68A;
+                padding: 0.2rem 0.45rem;
+                border-radius: 999px;
+                font-weight: 700;
+                font-size: 0.78rem;
+            }
+
+            .empty-state {
+                background: #FFFFFF;
+                border: 1px dashed #CBD5E1;
+                border-radius: 24px;
+                padding: 2rem;
+                text-align: center;
+                color: #475569;
+                box-shadow: 0 10px 28px rgba(15,30,69,0.04);
+            }
+
+            .empty-title {
+                font-size: 1.35rem;
+                font-weight: 850;
+                color: #1F2937;
+                margin-bottom: 0.4rem;
+            }
+
+            div[data-testid="stDataFrame"] {
+                border-radius: 18px;
+                overflow: hidden;
+                border: 1px solid var(--border);
+                box-shadow: 0 10px 24px rgba(15,30,69,0.04);
+            }
+
+            .stButton > button[kind="primary"] {
+                border-radius: 14px;
+                font-weight: 800;
+                box-shadow: 0 10px 22px rgba(37,99,235,0.24);
+            }
+
+            .stDownloadButton > button {
+                border-radius: 14px;
+                font-weight: 700;
+            }
+
+            /* Correção final: remove bug visual do ícone nativo do arquivo no uploader da sidebar */
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderFile"] {
+                background: #111827 !important;
+                border: 1px solid rgba(255,255,255,0.18) !important;
+                border-radius: 10px !important;
+                padding: 0.55rem 0.65rem !important;
+                box-shadow: none !important;
+            }
+
+            /* Esconde o ícone nativo do arquivo, que em sidebar escura causa o quadrado visual quebrado */
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderFile"] > div:first-child {
+                display: none !important;
+            }
+
+            /* Mantém nome e tamanho do XML legíveis */
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderFileName"],
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderFileSize"],
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderFile"] span,
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderFile"] small {
+                color: #F8FAFC !important;
+                fill: #F8FAFC !important;
+                opacity: 1 !important;
+                text-shadow: none !important;
+            }
+
+            /* Ajusta botão de remover arquivo */
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderDeleteBtn"],
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] button[aria-label*="Remove"],
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] button[aria-label*="Remover"],
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] button[aria-label*="Delete"],
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] button[aria-label*="Excluir"] {
+                background: rgba(255,255,255,0.08) !important;
+                border: 1px solid rgba(255,255,255,0.14) !important;
+                border-radius: 999px !important;
+                color: #F8FAFC !important;
+                box-shadow: none !important;
+            }
+
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderDeleteBtn"] svg,
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stFileUploaderDeleteBtn"] svg path,
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] button[aria-label*="Remove"] svg,
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] button[aria-label*="Remove"] svg path,
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] button[aria-label*="Remover"] svg,
+            [data-testid="stSidebar"] [data-testid="stFileUploader"] button[aria-label*="Remover"] svg path {
+                fill: #F8FAFC !important;
+                color: #F8FAFC !important;
+                opacity: 1 !important;
+            }
+
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_brand_sidebar():
+    st.markdown(
+        """
+        <div class="sidebar-brand">
+            <div class="sidebar-title">Calculadora XML</div>
+            <div class="sidebar-subtitle">
+                Auditoria visual de ICMS, PIS/COFINS e desmembramento proporcional.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_topo(titulo: str, subtitulo: str):
+    st.markdown(
+        f"""
+        <div class="hero-card">
+            <div class="hero-eyebrow">Análise fiscal de NF-e</div>
+            <div class="hero-title">{titulo}</div>
+            <div class="hero-text">{subtitulo}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_metric_card(label: str, valor: str, ajuda: str = ""):
+    st.markdown(
+        f"""
+        <div class="metric-card">
+            <div class="metric-label">{label}</div>
+            <div class="metric-value">{valor}</div>
+            <div class="metric-help">{ajuda}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_section_header(titulo: str, subtitulo: str = ""):
+    st.markdown(
+        f"""
+        <div class="section-title">{titulo}</div>
+        <div class="section-subtitle">{subtitulo}</div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def tela_login():
@@ -31,38 +532,37 @@ def tela_login():
     if st.session_state.autenticado:
         with st.sidebar:
             st.success(f"Logado como: {st.session_state.usuario_logado}")
-
             if st.button("Sair"):
                 st.session_state.autenticado = False
                 st.session_state.usuario_logado = None
                 st.rerun()
-
         return True
 
-    st.title("Acesso ao sistema")
-    st.caption("Informe usuário e senha para acessar a calculadora.")
+    render_topo(
+        "Acesso ao sistema",
+        "Informe usuário e senha para acessar a calculadora fiscal.",
+    )
 
-    with st.form("form_login"):
-        usuario = st.text_input("Usuário")
-        senha = st.text_input("Senha", type="password")
+    col_esq, col_centro, col_dir = st.columns([1, 1.15, 1])
 
-        entrar = st.form_submit_button("Entrar")
+    with col_centro:
+        with st.form("form_login"):
+            usuario = st.text_input("Usuário")
+            senha = st.text_input("Senha", type="password")
+            entrar = st.form_submit_button(
+                "Entrar", type="primary", use_container_width=True
+            )
 
-    if entrar:
-        usuario = usuario.strip()
-
-        if usuario in USUARIOS and senha == USUARIOS[usuario]:
-            st.session_state.autenticado = True
-            st.session_state.usuario_logado = usuario
-            st.rerun()
-        else:
-            st.error("Usuário ou senha inválidos.")
+        if entrar:
+            usuario = usuario.strip()
+            if usuario in USUARIOS and senha == USUARIOS[usuario]:
+                st.session_state.autenticado = True
+                st.session_state.usuario_logado = usuario
+                st.rerun()
+            else:
+                st.error("Usuário ou senha inválidos.")
 
     return False
-
-
-if not tela_login():
-    st.stop()
 
 
 def valor_float(valor, padrao=0.0):
@@ -78,6 +578,19 @@ def valor_float(valor, padrao=0.0):
         return float(valor_texto)
     except Exception:
         return padrao
+
+
+def formatar_numero(valor, casas=2):
+    try:
+        if pd.isna(valor):
+            return "0,00"
+        return (
+            f"{float(valor):,.{casas}f}".replace(",", "X")
+            .replace(".", ",")
+            .replace("X", ".")
+        )
+    except Exception:
+        return "0,00"
 
 
 def montar_descricao_produto(linha):
@@ -124,6 +637,10 @@ def config_colunas_resultado_xml():
         "pRedBC XML": st.column_config.NumberColumn("pRedBC XML", format="%.4f"),
         "pRedBC calculado": st.column_config.NumberColumn(
             "pRedBC calculado",
+            format="%.4f",
+        ),
+        "Diferença pRedBC": st.column_config.NumberColumn(
+            "Diferença pRedBC",
             format="%.4f",
         ),
     }
@@ -178,69 +695,324 @@ def config_colunas_simulador():
     }
 
 
-st.title("Calculadora de redução de base ICMS em XML de NF-e")
-st.caption(
-    "Upload de XML, leitura dos itens, cálculo do pRedBC e simulação de desmembramento proporcional."
-)
+def preparar_dataframe(linhas):
+    df = pd.DataFrame(linhas)
 
-with st.expander("Fórmula utilizada", expanded=True):
-    st.code(
-        "pRedBC calculado = 100 - ((vBC / ((qTrib * vUnTrib) + vOutro)) * 100)",
-        language="text",
+    for coluna in ["pRedBC XML", "pRedBC calculado"]:
+        if coluna in df.columns:
+            df[coluna] = pd.to_numeric(df[coluna], errors="coerce")
+
+    if "pRedBC XML" in df.columns and "pRedBC calculado" in df.columns:
+        df["Diferença pRedBC"] = df["pRedBC calculado"] - df["pRedBC XML"]
+        df["Situação pRedBC"] = df.apply(classificar_predbc, axis=1)
+
+    return df
+
+
+def classificar_predbc(linha, tolerancia=0.05):
+    xml = linha.get("pRedBC XML")
+    calculado = linha.get("pRedBC calculado")
+
+    if pd.isna(xml) and pd.isna(calculado):
+        return "Sem pRedBC"
+
+    if pd.isna(xml):
+        return "Sem pRedBC XML"
+
+    if pd.isna(calculado):
+        return "Sem cálculo"
+
+    diferenca = calculado - xml
+
+    if abs(diferenca) <= tolerancia:
+        return "OK"
+
+    if diferenca > 0:
+        return "Calculado maior"
+
+    return "Calculado menor"
+
+
+def opcoes_unicas(df, coluna):
+    if coluna not in df.columns:
+        return []
+
+    valores = df[coluna].dropna().astype(str)
+    valores = valores[valores.str.strip() != ""]
+    return sorted(valores.unique().tolist())
+
+
+def aplicar_filtros(df, filtros):
+    df_filtrado = df.copy()
+
+    for coluna, valores in filtros.items():
+        if valores and coluna in df_filtrado.columns:
+            df_filtrado = df_filtrado[df_filtrado[coluna].astype(str).isin(valores)]
+
+    return df_filtrado.reset_index(drop=True)
+
+
+def render_sidebar_inicio():
+    with st.sidebar:
+        render_brand_sidebar()
+        st.divider()
+
+        pagina = st.radio(
+            "Navegação",
+            MENU_PAGINAS,
+            index=0,
+            label_visibility="collapsed",
+            key="pagina_navegacao",
+        )
+
+        st.divider()
+        st.caption("Arquivos XML")
+        arquivos_xml = st.file_uploader(
+            "Selecione um ou vários XMLs de NF-e",
+            type=["xml"],
+            accept_multiple_files=True,
+            label_visibility="collapsed",
+            key="uploader_xml_nfe",
+        )
+
+        return pagina, arquivos_xml
+
+
+def render_sidebar_filtros(df):
+    filtros = {}
+
+    if df is None or df.empty:
+        return filtros
+
+    with st.sidebar:
+        st.divider()
+        st.caption("Filtros da análise")
+
+        filtros["Número NF"] = st.multiselect(
+            "NF",
+            opcoes_unicas(df, "Número NF"),
+            placeholder="Todas",
+            key="filtro_nf",
+        )
+
+        filtros["Nome emitente"] = st.multiselect(
+            "Emitente",
+            opcoes_unicas(df, "Nome emitente"),
+            placeholder="Todos",
+            key="filtro_emitente",
+        )
+
+        filtros["NCM"] = st.multiselect(
+            "NCM",
+            opcoes_unicas(df, "NCM"),
+            placeholder="Todos",
+            key="filtro_ncm",
+        )
+
+        filtros["CFOP"] = st.multiselect(
+            "CFOP",
+            opcoes_unicas(df, "CFOP"),
+            placeholder="Todos",
+            key="filtro_cfop",
+        )
+
+        filtros["CST/CSOSN ICMS"] = st.multiselect(
+            "CST/CSOSN ICMS",
+            opcoes_unicas(df, "CST/CSOSN ICMS"),
+            placeholder="Todos",
+            key="filtro_cst_icms",
+        )
+
+        if "Situação pRedBC" in df.columns:
+            filtros["Situação pRedBC"] = st.multiselect(
+                "Situação pRedBC",
+                opcoes_unicas(df, "Situação pRedBC"),
+                placeholder="Todas",
+                key="filtro_situacao_predbc",
+            )
+
+    return filtros
+
+
+def render_estado_inicial():
+    render_topo(
+        "Calculadora de redução de base ICMS em XML de NF-e",
+        "Envie um ou mais XMLs pela barra lateral para iniciar a análise. O painel foi organizado para leitura fiscal rápida, com filtros laterais e navegação por seções.",
     )
-    st.write("Quando `vOutro` não existir no XML, ele é considerado como `0`.")
-    st.write("Base PIS/COFINS calculada = Valor produto - vICMS.")
+
+    st.markdown(
+        """
+        <div class="empty-state">
+            <div class="empty-title">Nenhum XML enviado</div>
+            <div>Use a barra lateral esquerda para selecionar os XMLs de NF-e.</div>
+            <div class="pill-row" style="justify-content:center;">
+                <span class="pill">Upload múltiplo</span>
+                <span class="pill">Filtros laterais</span>
+                <span class="pill">Dashboard fiscal</span>
+                <span class="pill">Simulador proporcional</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
-arquivos_xml = st.file_uploader(
-    "Selecione um ou vários XMLs de NF-e",
-    type=["xml"],
-    accept_multiple_files=True,
-)
+def render_cards_resumo(df, arquivos_xml):
+    total_xmls = len(arquivos_xml)
+    total_itens = len(df)
+    total_notas = (
+        df["Chave de acesso"].nunique() if "Chave de acesso" in df.columns else 0
+    )
+    itens_com_predbc = (
+        int(df["pRedBC XML"].notna().sum()) if "pRedBC XML" in df.columns else 0
+    )
+    divergentes = 0
+
+    if "Situação pRedBC" in df.columns:
+        divergentes = int(
+            df["Situação pRedBC"].isin(["Calculado maior", "Calculado menor"]).sum()
+        )
+
+    col1, col2, col3, col4, col5 = st.columns(5)
+    with col1:
+        render_metric_card("XMLs", str(total_xmls), "Arquivos enviados")
+    with col2:
+        render_metric_card("Itens", str(total_itens), "Itens lidos no XML")
+    with col3:
+        render_metric_card("Notas", str(total_notas), "Chaves únicas")
+    with col4:
+        render_metric_card(
+            "Com pRedBC", str(itens_com_predbc), "Itens com redução no XML"
+        )
+    with col5:
+        render_metric_card(
+            "Divergentes", str(divergentes), "Diferença acima da tolerância"
+        )
 
 
-if not arquivos_xml:
-    st.info("Envie um ou mais arquivos XML de NF-e para iniciar a análise.")
-    st.stop()
+def render_dashboard(df, arquivos_xml):
+    render_topo(
+        "Dashboard da análise XML",
+        "Resumo dos arquivos processados, principais totais e distribuição das situações de redução de base.",
+    )
+
+    render_cards_resumo(df, arquivos_xml)
+
+    col_esq, col_dir = st.columns([1.15, 1])
+
+    with col_esq:
+        render_section_header(
+            "Resumo por emitente",
+            "Quantidade de notas e itens agrupados pelo fornecedor do XML.",
+        )
+
+        if "Nome emitente" in df.columns:
+            resumo_emitente = (
+                df.groupby(["Nome emitente", "CNPJ emitente"], dropna=False)
+                .agg(
+                    Notas=("Chave de acesso", "nunique"),
+                    Itens=("Número item", "count"),
+                    Valor_produto=("Valor produto", "sum"),
+                    Base_ICMS=("vBC", "sum"),
+                    ICMS=("vICMS", "sum"),
+                )
+                .reset_index()
+                .sort_values(["Itens", "Notas"], ascending=False)
+            )
+
+            st.dataframe(
+                resumo_emitente,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Valor_produto": st.column_config.NumberColumn(
+                        "Valor produto", format="%.2f"
+                    ),
+                    "Base_ICMS": st.column_config.NumberColumn(
+                        "Base ICMS", format="%.2f"
+                    ),
+                    "ICMS": st.column_config.NumberColumn("ICMS", format="%.2f"),
+                },
+            )
+        else:
+            st.info("Coluna Nome emitente não encontrada no XML.")
+
+    with col_dir:
+        render_section_header(
+            "Situação pRedBC",
+            "Classificação automática entre XML e cálculo interno.",
+        )
+
+        if "Situação pRedBC" in df.columns:
+            resumo_situacao = (
+                df["Situação pRedBC"]
+                .value_counts(dropna=False)
+                .rename_axis("Situação")
+                .reset_index(name="Quantidade")
+            )
+            st.dataframe(resumo_situacao, use_container_width=True, hide_index=True)
+        else:
+            st.info("Ainda não há coluna de situação pRedBC.")
+
+    render_section_header(
+        "Totais fiscais",
+        "Somatório dos principais campos monetários extraídos e calculados.",
+    )
+
+    col_t1, col_t2, col_t3, col_t4 = st.columns(4)
+    with col_t1:
+        render_metric_card(
+            "Valor produto",
+            f"R$ {formatar_numero(df.get('Valor produto', pd.Series(dtype=float)).sum())}",
+            "Soma dos produtos",
+        )
+    with col_t2:
+        render_metric_card(
+            "Base ICMS",
+            f"R$ {formatar_numero(df.get('vBC', pd.Series(dtype=float)).sum())}",
+            "Soma de vBC",
+        )
+    with col_t3:
+        render_metric_card(
+            "ICMS",
+            f"R$ {formatar_numero(df.get('vICMS', pd.Series(dtype=float)).sum())}",
+            "Soma de vICMS",
+        )
+    with col_t4:
+        render_metric_card(
+            "Base PIS/COFINS",
+            f"R$ {formatar_numero(df.get('Base PIS/COFINS calculada', pd.Series(dtype=float)).sum())}",
+            "Valor produto - ICMS",
+        )
 
 
-try:
-    linhas = parsear_varios_xmls(arquivos_xml)
-except Exception as erro:
-    st.error(f"Erro ao processar XML: {erro}")
-    st.stop()
-
-
-if not linhas:
-    st.warning("Nenhum item de NF-e foi encontrado nos XMLs enviados.")
-    st.stop()
-
-
-df = pd.DataFrame(linhas)
-
-
-col1, col2, col3, col4 = st.columns(4)
-
-col1.metric("XMLs enviados", len(arquivos_xml))
-col2.metric("Itens lidos", len(df))
-col3.metric("Notas", df["Chave de acesso"].nunique())
-col4.metric("Itens com pRedBC XML", int(df["pRedBC XML"].notna().sum()))
-
-
-aba_resultado, aba_simulador = st.tabs(
-    [
+def render_resultado_xml(df):
+    render_topo(
         "Resultado XML",
-        "Simulador de desmembramento",
-    ]
-)
-
-
-with aba_resultado:
-    st.subheader("Itens extraídos do XML")
-    st.caption(
-        "Clique na coluna lateral da tabela para selecionar um item. "
-        "A linha selecionada fica marcada por inteiro para facilitar a navegação."
+        "Tabela fiscal item a item com campos originais do XML, cálculo do pRedBC e situação da divergência.",
     )
+
+    render_section_header(
+        "Itens extraídos do XML",
+        "Clique na coluna lateral da tabela para selecionar um item e reaproveitar no simulador.",
+    )
+
+    col_acoes1, col_acoes2 = st.columns([1, 4])
+    with col_acoes1:
+        csv = df.to_csv(index=False, sep=";", encoding="utf-8-sig")
+        st.download_button(
+            "Baixar CSV",
+            data=csv,
+            file_name="analise_xml.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+
+    with col_acoes2:
+        st.caption(
+            "A tabela abaixo respeita os filtros aplicados na barra lateral. "
+            "Para voltar à visão completa, limpe os filtros."
+        )
 
     evento_tabela_xml = st.dataframe(
         df,
@@ -257,7 +1029,6 @@ with aba_resultado:
     if linhas_selecionadas:
         posicao_linha_selecionada = linhas_selecionadas[0]
         st.session_state["linha_xml_selecionada"] = posicao_linha_selecionada
-
         item_marcado = df.iloc[posicao_linha_selecionada]
         st.info(
             "Item selecionado: "
@@ -268,12 +1039,10 @@ with aba_resultado:
         )
 
 
-with aba_simulador:
-    st.subheader("Simulador de desmembramento de item")
-
-    st.write(
-        "Selecione um item da NF-e e informe a quantidade que será desmembrada. "
-        "O sistema calcula proporcionalmente os valores de ICMS, PIS e COFINS."
+def render_simulador(df):
+    render_topo(
+        "Simulador de desmembramento",
+        "Selecione um item da NF-e e informe a quantidade que será desmembrada. O sistema calcula valores proporcionais de ICMS, PIS e COFINS.",
     )
 
     colunas_obrigatorias = [
@@ -308,7 +1077,6 @@ with aba_simulador:
         st.stop()
 
     df_simulador = df.copy()
-
     df_simulador["Produto para seleção"] = df_simulador.apply(
         montar_descricao_produto,
         axis=1,
@@ -319,66 +1087,55 @@ with aba_simulador:
 
     if "linha_xml_selecionada" in st.session_state:
         posicao_salva = int(st.session_state["linha_xml_selecionada"])
-
         if 0 <= posicao_salva < len(opcoes_simulador):
             indice_padrao_simulador = posicao_salva
 
+    render_section_header(
+        "Seleção do item",
+        "A lista abaixo considera os filtros aplicados na barra lateral.",
+    )
+
     indice_selecionado = st.selectbox(
-        "Selecione o produto da NF-e",
+        "Produto da NF-e",
         options=opcoes_simulador,
         index=indice_padrao_simulador,
         format_func=lambda indice: df_simulador.loc[indice, "Produto para seleção"],
     )
 
     item_original = df_simulador.loc[indice_selecionado].to_dict()
-
     quantidade_original = valor_float(item_original.get("qTrib"))
 
     if quantidade_original <= 0:
         st.error("A quantidade original do item é inválida para simulação.")
         st.stop()
 
-    st.markdown("### Dados originais do item")
+    render_section_header(
+        "Dados originais do item", "Principais valores usados na simulação."
+    )
 
     col_a, col_b, col_c, col_d, col_e, col_f = st.columns(6)
 
-    col_a.metric("Quantidade original", f"{quantidade_original:.4f}")
-    col_b.metric("vUnTrib", f"{valor_float(item_original.get('vUnTrib')):.6f}")
-    col_c.metric(
-        "Valor produto", f"{valor_float(item_original.get('Valor produto')):.2f}"
-    )
-    col_d.metric("vBC ICMS", f"{valor_float(item_original.get('vBC')):.2f}")
-    col_e.metric("vICMS", f"{valor_float(item_original.get('vICMS')):.2f}")
-    col_f.metric(
-        "Base PIS/COFINS",
-        f"{valor_float(item_original.get('Base PIS/COFINS calculada')):.2f}",
-    )
-
-    col_pis1, col_pis2, col_pis3, col_cof1, col_cof2, col_cof3 = st.columns(6)
-
-    col_pis1.metric(
-        "Base PIS XML", f"{valor_float(item_original.get('Base PIS XML')):.2f}"
-    )
-    col_pis2.metric(
-        "Alíquota PIS XML",
-        f"{valor_float(item_original.get('Alíquota PIS XML')):.2f}%",
-    )
-    col_pis3.metric(
-        "Valor PIS XML", f"{valor_float(item_original.get('Valor PIS XML')):.2f}"
-    )
-
-    col_cof1.metric(
-        "Base COFINS XML",
-        f"{valor_float(item_original.get('Base COFINS XML')):.2f}",
-    )
-    col_cof2.metric(
-        "Alíquota COFINS XML",
-        f"{valor_float(item_original.get('Alíquota COFINS XML')):.2f}%",
-    )
-    col_cof3.metric(
-        "Valor COFINS XML",
-        f"{valor_float(item_original.get('Valor COFINS XML')):.2f}",
-    )
+    with col_a:
+        render_metric_card("Qtd. original", f"{quantidade_original:.4f}")
+    with col_b:
+        render_metric_card(
+            "vUnTrib", f"{valor_float(item_original.get('vUnTrib')):.6f}"
+        )
+    with col_c:
+        render_metric_card(
+            "Valor produto", f"R$ {formatar_numero(item_original.get('Valor produto'))}"
+        )
+    with col_d:
+        render_metric_card(
+            "vBC ICMS", f"R$ {formatar_numero(item_original.get('vBC'))}"
+        )
+    with col_e:
+        render_metric_card("vICMS", f"R$ {formatar_numero(item_original.get('vICMS'))}")
+    with col_f:
+        render_metric_card(
+            "Base PIS/COFINS",
+            f"R$ {formatar_numero(item_original.get('Base PIS/COFINS calculada'))}",
+        )
 
     with st.expander("Ver dados completos do item selecionado", expanded=False):
         st.dataframe(
@@ -388,24 +1145,30 @@ with aba_simulador:
             column_config=config_colunas_resultado_xml(),
         )
 
-    quantidade_desmembrada = st.number_input(
-        "Quantidade a desmembrar",
-        min_value=0.0001,
-        max_value=float(quantidade_original),
-        value=1.0000 if quantidade_original >= 1 else float(quantidade_original),
-        step=1.0000,
-        format="%.4f",
-    )
+    render_section_header("Parâmetro do desmembramento")
+
+    col_input, col_q1, col_q2, col_q3 = st.columns([1.2, 1, 1, 1])
+
+    with col_input:
+        quantidade_desmembrada = st.number_input(
+            "Quantidade a desmembrar",
+            min_value=0.0001,
+            max_value=float(quantidade_original),
+            value=1.0000 if quantidade_original >= 1 else float(quantidade_original),
+            step=1.0000,
+            format="%.4f",
+        )
 
     quantidade_restante = quantidade_original - quantidade_desmembrada
 
-    col_qtd1, col_qtd2, col_qtd3 = st.columns(3)
+    with col_q1:
+        render_metric_card("Original", f"{quantidade_original:.4f}")
+    with col_q2:
+        render_metric_card("Desmembrada", f"{quantidade_desmembrada:.4f}")
+    with col_q3:
+        render_metric_card("Restante", f"{quantidade_restante:.4f}")
 
-    col_qtd1.metric("Quantidade original", f"{quantidade_original:.4f}")
-    col_qtd2.metric("Quantidade desmembrada", f"{quantidade_desmembrada:.4f}")
-    col_qtd3.metric("Quantidade restante", f"{quantidade_restante:.4f}")
-
-    if st.button("Simular desmembramento", type="primary"):
+    if st.button("Simular desmembramento", type="primary", use_container_width=True):
         try:
             resultado_simulacao = simular_desmembramento(
                 item_original=item_original,
@@ -414,7 +1177,10 @@ with aba_simulador:
 
             df_resultado_simulacao = pd.DataFrame(resultado_simulacao)
 
-            st.markdown("### Resultado da simulação")
+            render_section_header(
+                "Resultado da simulação",
+                "Linhas proporcionais do item desmembrado e do saldo restante.",
+            )
 
             st.dataframe(
                 df_resultado_simulacao,
@@ -427,3 +1193,72 @@ with aba_simulador:
             st.error(str(erro))
         except Exception as erro:
             st.error(f"Erro ao simular desmembramento: {erro}")
+
+
+def render_formulas():
+    render_topo(
+        "Fórmulas utilizadas",
+        "Referência dos critérios aplicados na leitura do XML e na simulação proporcional.",
+    )
+
+    render_section_header("Redução de base ICMS")
+    st.code(
+        "pRedBC calculado = 100 - ((vBC / ((qTrib * vUnTrib) + vOutro)) * 100)",
+        language="text",
+    )
+    st.write("Quando `vOutro` não existir no XML, ele é considerado como `0`.")
+
+    render_section_header("Base PIS/COFINS calculada")
+    st.code("Base PIS/COFINS calculada = Valor produto - vICMS", language="text")
+
+    render_section_header("Simulador proporcional")
+    st.code(
+        "Fator = Quantidade desmembrada / Quantidade original\n"
+        "Valor proporcional = Valor original * Fator",
+        language="text",
+    )
+
+
+aplicar_css_global()
+
+if not tela_login():
+    st.stop()
+
+pagina, arquivos_xml = render_sidebar_inicio()
+
+if not arquivos_xml:
+    render_estado_inicial()
+    st.stop()
+
+try:
+    linhas = parsear_varios_xmls(arquivos_xml)
+except Exception as erro:
+    st.error(f"Erro ao processar XML: {erro}")
+    st.stop()
+
+if not linhas:
+    st.warning("Nenhum item de NF-e foi encontrado nos XMLs enviados.")
+    st.stop()
+
+df_original = preparar_dataframe(linhas)
+
+filtros = render_sidebar_filtros(df_original)
+
+df = aplicar_filtros(df_original, filtros)
+
+if df.empty:
+    render_topo(
+        "Nenhum item encontrado",
+        "Os XMLs foram lidos, mas os filtros laterais não retornaram itens.",
+    )
+    st.warning("Limpe ou ajuste os filtros na barra lateral para visualizar os itens.")
+    st.stop()
+
+if pagina == "Dashboard":
+    render_dashboard(df, arquivos_xml)
+elif pagina == "Resultado XML":
+    render_resultado_xml(df)
+elif pagina == "Simulador":
+    render_simulador(df)
+elif pagina == "Fórmulas":
+    render_formulas()
