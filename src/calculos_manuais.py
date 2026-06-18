@@ -81,9 +81,10 @@ def aplicar_percentual(base: Decimal, percentual: Decimal) -> Decimal:
 
 def calcular_icms_reducao_manual(
     valor_referencia_icms,
-    percentual_base_icms,
-    sugestao_icms: str,
-    aliquota_icms_manual,
+    percentual_base_icms=None,
+    sugestao_icms: str = "ICMS 19%",
+    aliquota_icms_manual=None,
+    **kwargs,
 ) -> dict:
     """
     Calcula ICMS a partir do percentual da base que será tributada.
@@ -93,12 +94,19 @@ def calcular_icms_reducao_manual(
     - Redução ICMS % = 100 - Percentual base ICMS
     - Valor ICMS = Base ICMS reduzida * Alíquota ICMS / 100
 
+    Compatibilidade:
+    - Aceita o argumento percentual_base_icms usado na tela atual.
+    - Também aceita percentual_base, caso algum trecho antigo chame a função assim.
+
     Exemplo:
     Valor referência = 155,00
     Percentual base ICMS = 46,32%
     Base ICMS reduzida = 155,00 * 46,32% = 71,80
     Valor ICMS = 71,80 * 19% = 13,64
     """
+    if percentual_base_icms is None:
+        percentual_base_icms = kwargs.get("percentual_base")
+
     valor_referencia = decimal_manual(valor_referencia_icms, padrao=None)
     percentual_base = decimal_manual(percentual_base_icms)
     aliquota_icms = resolver_aliquota_icms(sugestao_icms, aliquota_icms_manual)
