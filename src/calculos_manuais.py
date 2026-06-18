@@ -84,6 +84,7 @@ def calcular_icms_reducao_manual(
     percentual_base_icms=None,
     sugestao_icms: str = "ICMS 19%",
     aliquota_icms_manual=None,
+    reducao_icms=None,
     **kwargs,
 ) -> dict:
     """
@@ -96,6 +97,7 @@ def calcular_icms_reducao_manual(
 
     Compatibilidade:
     - Aceita o argumento percentual_base_icms usado na tela atual.
+    - Também aceita reducao_icms, nome usado por versões anteriores da tela.
     - Também aceita percentual_base, caso algum trecho antigo chame a função assim.
 
     Exemplo:
@@ -105,7 +107,13 @@ def calcular_icms_reducao_manual(
     Valor ICMS = 71,80 * 19% = 13,64
     """
     if percentual_base_icms is None:
+        percentual_base_icms = reducao_icms
+
+    if percentual_base_icms is None:
         percentual_base_icms = kwargs.get("percentual_base")
+
+    if percentual_base_icms is None:
+        percentual_base_icms = kwargs.get("reducao_icms")
 
     valor_referencia = decimal_manual(valor_referencia_icms, padrao=None)
     percentual_base = decimal_manual(percentual_base_icms)
